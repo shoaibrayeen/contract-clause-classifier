@@ -76,6 +76,7 @@ def full_report(logits: np.ndarray, labels: np.ndarray, names: list[str], temper
     return {
         "n": int(len(labels)),
         "accuracy": float(accuracy_score(labels, pred)),
+        "top3_accuracy": float((np.argsort(-logits, axis=-1)[:, :3] == labels[:, None]).any(axis=1).mean()),
         "micro_f1": float(f1_score(labels, pred, average="micro")),
         "macro_f1": float(f1_score(labels, pred, average="macro", labels=list(range(len(names))), zero_division=0)),
         "weighted_f1": float(f1_score(labels, pred, average="weighted")),

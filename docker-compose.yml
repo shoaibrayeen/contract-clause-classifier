@@ -9,11 +9,11 @@ services:
       - path: .env
         required: false
     environment:
-      MODEL_DIR: /app/artifacts/best
+      RUNS_DIR: /app/artifacts/runs          # every version is served; requests default to the latest
       DATA_DIR: /app/data
       DEVICE: cpu
     volumes:
-      # artifacts/best is a relative symlink into artifacts/runs/<run>/merged, so mount the whole folder.
+      # All model versions live in artifacts/runs/<run>-v<N>/merged.
       - ./artifacts:/app/artifacts:ro
       # Raw LEDGAR parquet for /v1/dataset (downloaded on first request if missing).
       - ./data:/app/data

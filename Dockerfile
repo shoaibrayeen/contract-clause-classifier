@@ -4,6 +4,8 @@
 #
 #   docker build -t contract-clause-classifier .
 #   docker run -p 8000:8000 -v "$PWD/artifacts:/app/artifacts:ro" -v "$PWD/data:/app/data" contract-clause-classifier
+#
+# Serves every trained version under /app/artifacts/runs (default = latest) and the playground at /playground.
 
 FROM python:3.12.15-slim-bookworm
 
@@ -12,7 +14,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     HF_HOME=/app/.cache/huggingface \
-    MODEL_DIR=/app/artifacts/best \
+    RUNS_DIR=/app/artifacts/runs \
+    LABEL_GROUPS=/app/configs/ledgar_label_groups.yaml \
     DATA_DIR=/app/data \
     DEVICE=cpu \
     TOKENIZERS_PARALLELISM=false
@@ -25,6 +28,7 @@ RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
 # Runtime deps only (training extras peft/accelerate/scikit-learn are not needed to serve a merged model).
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
+COPY configs/ledgar_label_groups.yaml ./configs/ledgar_label_groups.yaml
 RUN pip install . && \
     useradd --create-home --uid 1000 app && \
     mkdir -p /app/artifacts /app/data /app/.cache && chown -R app:app /app

@@ -80,14 +80,15 @@ def main(
     if model_dir.name == "merged":  # record headline metrics for `make models` and /v1/models
         try:
             update_model_info(model_dir, temperature=temperature, test={
-                "split": split, "n": report["n"], "accuracy": report["accuracy"], "micro_f1": report["micro_f1"],
+                "split": split, "n": report["n"], "accuracy": report["accuracy"], "top3_accuracy": report["top3_accuracy"],
+                "micro_f1": report["micro_f1"],
                 "macro_f1": report["macro_f1"], "ece": report["ece"],
             })
         except OSError as exc:
             console.print(f"[yellow]Could not update model_info.json: {exc}[/]")
 
     t = Table(title=f"{split} metrics ({report['n']} examples)")
-    for k in ("accuracy", "micro_f1", "macro_f1", "weighted_f1", "nll", "ece_uncalibrated", "ece", "temperature"):
+    for k in ("accuracy", "top3_accuracy", "micro_f1", "macro_f1", "weighted_f1", "nll", "ece_uncalibrated", "ece", "temperature"):
         t.add_row(k, f"{report[k]:.4f}")
     console.print(t)
     c = Table(title="Top confusions (true -> predicted)")

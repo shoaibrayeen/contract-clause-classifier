@@ -1,15 +1,18 @@
 # Contract clause classifier - common commands. Run `make help`.
-# Every target is idempotent; `make all` runs the full pipeline end to end.
+#
+# Model versions: every training run creates <train.run_name>-v<model_version> (from the config) and never
+# overwrites an existing model. `make all` trains, evaluates, renders the GIF, then bumps model_version.
 
 CONFIG ?= configs/ledgar_qwen3_0.6b.yaml
-RUN    ?= ledgar-qwen3-0.6b-lora
 PORT   ?= 8000
 IMAGE  ?= contract-clause-classifier:0.1.0
+MODEL  ?= latest
 UV     ?= uv
 CAFFEINATE := $(shell command -v caffeinate >/dev/null 2>&1 && echo "caffeinate -i")
 
 .DEFAULT_GOAL := help
-.PHONY: help setup data train resume sanity evaluate gif predict serve test docker-build docker-up docker-down all clean-runs
+.PHONY: help setup data train resume restart finish evaluate gif bump models next adopt sanity predict serve test \
+        docker-build docker-up docker-down all clean-runs
 
 help: ## Show this help
 	@awk 'BEGIN{FS=":.*## "} /^[a-zA-Z_-]+:.*## /{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -17,33 +20,63 @@ help: ## Show this help
 setup: ## Install Python 3.12 + pinned dependencies into .venv
 	$(UV) sync
 
+# ---------------------------------------------------------------- pipeline
+
+all: data train finish ## Full pipeline: data -> train next version -> evaluate -> GIF -> bump version
+	@$(UV) run python scripts/07_models.py list --config $(CONFIG)
+
 data: ## Step 1: download LEDGAR and tokenize (idempotent)
 	$(UV) run python scripts/01_prepare_data.py --config $(CONFIG)
 
-train: ## Step 2: fine-tune with live console dashboard + full telemetry (keeps the Mac awake)
-	$(CAFFEINATE) $(UV) run python scripts/02_train.py --config $(CONFIG) --run-name $(RUN)
+train: ## Step 2: train the next model version with live dashboard + telemetry (keeps the Mac awake)
+	$(CAFFEINATE) $(UV) run python scripts/02_train.py --config $(CONFIG)
 
-resume: ## Continue an interrupted training run from its last checkpoint
-	$(CAFFEINATE) $(UV) run python scripts/02_train.py --config $(CONFIG) --run-name $(RUN) --resume
+finish: evaluate gif bump ## Steps 3-5 for the newest model: evaluate + calibrate, GIF, bump model_version
 
-sanity: ## 5-minute smoke run on 256 examples (proves the loop learns; run name "sanity")
+evaluate: ## Step 3: calibrate on validation + full test report (MODEL=latest or a version id)
+	$(UV) run python scripts/03_evaluate.py --config $(CONFIG) --model $(MODEL)
+
+gif: ## Step 4: render a model's telemetry to a GIF and copy it to demo/ (MODEL=latest or a version id)
+	$(UV) run python scripts/06_render_gif.py --run $(MODEL) --copy-to demo
+
+bump: ## Step 5: raise model_version in the config after the current version completed
+	$(UV) run python scripts/07_models.py bump --config $(CONFIG)
+
+resume: ## Continue the unfinished current version, then evaluate, GIF and bump
+	$(CAFFEINATE) $(UV) run python scripts/02_train.py --config $(CONFIG) --resume
+	$(MAKE) finish CONFIG=$(CONFIG)
+
+restart: ## Discard the unfinished current version, train it from scratch, then evaluate, GIF and bump
+	$(CAFFEINATE) $(UV) run python scripts/02_train.py --config $(CONFIG) --restart
+	$(MAKE) finish CONFIG=$(CONFIG)
+
+# ---------------------------------------------------------------- versions
+
+models: ## List all trained model versions (latest marked) with their metrics
+	$(UV) run python scripts/07_models.py list --config $(CONFIG)
+
+next: ## Show the name and version the next training run will use
+	$(UV) run python scripts/07_models.py next --config $(CONFIG)
+
+adopt: ## Turn an unversioned finished run into a version: make adopt RUN=<run-dir-name>
+	$(UV) run python scripts/07_models.py adopt $(RUN) --config $(CONFIG)
+
+# ---------------------------------------------------------------- use the model
+
+sanity: ## 5-minute smoke run on 256 examples (unversioned run "sanity"; never becomes latest over a real model)
 	$(UV) run python scripts/02_train.py --config $(CONFIG) --run-name sanity --limit 256 --epochs 2 --eval-steps 32 --eval-limit 256 --grad-accum 1
 
-evaluate: ## Step 3: calibrate on validation + full test-set report for artifacts/best
-	$(UV) run python scripts/03_evaluate.py --config $(CONFIG) --model-dir artifacts/best
+predict: ## Classify a file: make predict FILE=contract.pdf [MODEL=ledgar-qwen3-0.6b-v1]
+	$(UV) run python scripts/04_predict.py $(or $(FILE),demo/sample_contract.txt) --config $(CONFIG) --model $(MODEL)
 
-gif: ## Render the run's telemetry into <run>/visuals/training.gif and copy it to demo/
-	$(UV) run python scripts/06_render_gif.py --run artifacts/runs/$(RUN)
-	mkdir -p demo && cp artifacts/runs/$(RUN)/visuals/training.gif demo/$(RUN)_training.gif && cp artifacts/runs/$(RUN)/visuals/training.png demo/$(RUN)_training_final_frame.png
-
-predict: ## Step 4: classify demo/sample_contract.txt (override with FILE=path)
-	$(UV) run python scripts/04_predict.py $(or $(FILE),demo/sample_contract.txt)
-
-serve: ## Step 5: OpenAI-compatible API on http://localhost:$(PORT) (uses MPS/CUDA if available)
+serve: ## API + playground on http://localhost:$(PORT)/playground (serves every version; default = latest)
+	@echo "Playground: http://localhost:$(PORT)/playground   API docs: http://localhost:$(PORT)/docs"
 	$(UV) run python scripts/05_serve.py --port $(PORT)
 
 test: ## Run the test suite (no trained model needed)
 	$(UV) run pytest -q
+
+# ---------------------------------------------------------------- docker
 
 docker-build: ## Build the CPU serving image
 	docker build -t $(IMAGE) .
@@ -54,8 +87,5 @@ docker-up: ## Run the API in Docker (mounts ./artifacts and ./data)
 docker-down: ## Stop the Docker API
 	docker compose down
 
-all: data train evaluate gif ## Full pipeline: data -> train -> evaluate/calibrate -> GIF
-	@echo "Done. Model: artifacts/best -> $$(readlink artifacts/best). Serve it with: make serve"
-
-clean-runs: ## Delete all training runs and the artifacts/best link (asks first)
-	@read -p "Delete artifacts/runs/* and artifacts/best? [y/N] " ans && [ "$$ans" = y ] && rm -rf artifacts/runs/* artifacts/best || echo "Kept."
+clean-runs: ## Delete ALL training runs and the artifacts/best link (asks first)
+	@read -p "Delete artifacts/runs/* and artifacts/best? This removes every model version. [y/N] " ans && [ "$$ans" = y ] && rm -rf artifacts/runs/* artifacts/best || echo "Kept."

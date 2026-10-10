@@ -132,7 +132,9 @@ def quick_metrics(logits: np.ndarray, labels: np.ndarray, num_labels: int) -> di
     logp = logits - logits.max(-1, keepdims=True)
     logp = logp - np.log(np.exp(logp).sum(-1, keepdims=True))
     nll = float(-logp[np.arange(len(labels)), labels].mean())
-    return {"accuracy": acc, "micro_f1": acc, "macro_f1": float(np.mean(f1s)), "loss": nll}
+    top3 = np.argsort(-logits, axis=-1)[:, :3]
+    top3_acc = float((top3 == labels[:, None]).any(axis=1).mean())
+    return {"accuracy": acc, "micro_f1": acc, "macro_f1": float(np.mean(f1s)), "loss": nll, "top3_accuracy": top3_acc}
 
 
 class Trainer:

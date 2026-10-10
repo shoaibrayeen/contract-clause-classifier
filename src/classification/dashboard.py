@@ -106,10 +106,11 @@ class TrainingDashboard:
 
     def _eval_table(self, rows: int) -> Table:
         t = Table(title="Validation", show_header=True, header_style="bold green", expand=True)
-        for col in ("step", "acc", "macro-F1", "loss", ""):
+        for col in ("step", "acc", "top-3", "macro-F1", "loss", ""):
             t.add_column(col, justify="right", no_wrap=True)
         for e in self.evals[-rows:]:
-            t.add_row(str(e["step"]), f"{e['accuracy']:.4f}", f"{e['macro_f1']:.4f}", f"{e['loss']:.4f}",
+            t.add_row(str(e["step"]), f"{e['accuracy']:.4f}", f"{e.get('top3_accuracy', float('nan')):.4f}",
+                      f"{e['macro_f1']:.4f}", f"{e['loss']:.4f}",
                       "[green]best[/]" if e["improved"] else "")
         return t
 

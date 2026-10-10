@@ -42,7 +42,8 @@ def _card(info: ModelInfo, latest_id: str | None, loaded: bool) -> ModelCard:
     metrics = {k: v for k, v in {
         "best_val_accuracy": info.info.get("best_val_accuracy"),
         "best_val_macro_f1": info.info.get("best_val_macro_f1"),
-        "test_accuracy": test.get("accuracy"), "test_macro_f1": test.get("macro_f1"),
+        "test_accuracy": test.get("accuracy"), "test_top3_accuracy": test.get("top3_accuracy"),
+        "test_macro_f1": test.get("macro_f1"),
     }.items() if v is not None} or None
     return ModelCard(id=info.id, created=int(info.created), version=info.version, is_latest=info.id == latest_id,
                      base_name=info.base_name, base_model=info.info.get("base_model"), loaded=loaded, metrics=metrics)

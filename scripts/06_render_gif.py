@@ -31,7 +31,11 @@ from PIL import Image  # noqa: E402
 
 app = typer.Typer(add_completion=False)
 
-HIGHLIGHT = ["Governing Laws", "Confidentiality", "Terminations", "Notices", "Indemnifications", "Taxes"]
+# Clause types to colour in the embedding panel: the first 6 that exist in the run's label set
+# (works for both the original 100 LEDGAR labels and the merged 72 clause types).
+HIGHLIGHT_CANDIDATES = ["Governing Laws", "Confidentiality", "Terminations", "Notices", "Indemnifications",
+                        "Taxes and Withholdings", "Taxes", "Counterparts", "Entire Agreements"]
+HIGHLIGHT: list[str] = HIGHLIGHT_CANDIDATES[:6]
 COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#6250d6"]
 MARKERS = ["o", "s", "^", "D", "*", "X"]
 INK, MUTED, GRID = "#0b0b0b", "#898781", "#e1e0d9"
@@ -100,7 +104,9 @@ def load_snapshots(tel: Path, names: list[str]):
     # Robust per-snapshot scaling (98th percentile) so a few outliers don't squash the cloud.
     proj = [p / (np.percentile(np.abs(p), 98) or 1.0) for p in proj]
     proj = [np.clip(p, -1.1, 1.1) for p in proj]
-    hl = {names.index(n): i for i, n in enumerate(HIGHLIGHT) if n in names}
+    global HIGHLIGHT
+    HIGHLIGHT = [n for n in HIGHLIGHT_CANDIDATES if n in names][:6]
+    hl = {names.index(n): i for i, n in enumerate(HIGHLIGHT)}
     group = np.array([hl.get(int(y), -1) for y in labels])
     return {"steps": steps, "proj": proj, "group": group, "acc": accs}
 
