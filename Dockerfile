@@ -29,6 +29,8 @@ RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 COPY configs/ledgar_label_groups.yaml ./configs/ledgar_label_groups.yaml
+# Raw LEDGAR data (28 MB) so /v1/dataset works without a volume mount.
+COPY data/raw/ledgar ./data/raw/ledgar
 RUN pip install . && \
     useradd --create-home --uid 1000 app && \
     mkdir -p /app/artifacts /app/data /app/.cache && chown -R app:app /app

@@ -34,14 +34,20 @@ def load_tokenizer(name_or_path: str | Path) -> PreTrainedTokenizerBase:
 
 def build_model(cfg: Config, label_names: list[str], tokenizer: PreTrainedTokenizerBase):
     """Create the trainable classifier. Weights are fp32; mixed precision via autocast."""
+    from transformers import AutoConfig
+
+    base_cfg = AutoConfig.from_pretrained(cfg.model_name)
+    # Only a base that already carries a classification head (e.g. a previously fine-tuned model) may have a
+    # head of another size; then it is re-initialised. For a causal-LM base nothing is ignored, so any real
+    # weight mismatch still raises.
+    has_head = any("ForSequenceClassification" in a for a in (base_cfg.architectures or []))
     model = AutoModelForSequenceClassification.from_pretrained(
         cfg.model_name,
         num_labels=len(label_names),
         id2label=id2label(label_names),
         label2id=label2id(label_names),
         dtype=torch.float32,
-        # A base that already has a classification head with another label count gets a fresh head.
-        ignore_mismatched_sizes=True,
+        ignore_mismatched_sizes=has_head and getattr(base_cfg, "num_labels", None) != len(label_names),
     )
     model.config.pad_token_id = tokenizer.pad_token_id
 

@@ -2,35 +2,65 @@
 #
 # LEDGAR labels each provision with the section heading its drafter chose, so the same clause appears
 # under several names ("Applicable Laws" vs "Governing Laws", "Integration" vs "Entire Agreements").
-# No model can tell these apart from the text, and they caused 38% of all validation errors in the
-# first full run (step 1,000 confusion matrix). Merging them turns 100 labels into 72 clause types.
+# No model can tell these apart from the text.
 #
-# Measured on that run's validation confusion matrix (3,000 examples, same checkpoint):
-#   100 labels: 82.97% accuracy  ->  72 clause types: 90.0% accuracy  (40% fewer errors)
+# Merge criterion (both must hold; see MEMORY.md for the full analysis, 2026-10-11):
+#   1. Legal test: the headings denote the same legal concept, i.e. the same section of a contract,
+#      judged the way a contracts lawyer would read the provisions (verified on the actual rows, not the
+#      heading names). Headings that share vocabulary but carry different legal meaning stay separate.
+#   2. Statistical test: the members are mutually confused on the FULL 10,000-row validation split by an
+#      independent TF-IDF + logistic-regression baseline (87.8% accuracy): at least ~8% of their combined
+#      rows are predicted as each other, or at least ~40% of one member's errors go to the other.
+#
+# Legal-analyst notes on the decisions:
+#   - Representations + Warranties: distinct doctrines (statement of fact vs promise of truth), but in
+#     these contracts both headings label the "represents and warrants" section: 75% of rows under each
+#     heading use that phrase; only 5% of "Warranties" rows are product warranties. Merged.
+#   - Authority + Authorizations: the due-authorization representation ("power and authority", "duly
+#     authorized by all necessary action"): 75% of "Authorizations" rows; only 8% concern permits. Merged.
+#   - Waivers + No Waivers: both are the no-waiver-by-conduct boilerplate; only 7% of "Waivers" rows
+#     waive something substantively (presentment, notice). Jury-trial waivers have their own label. Merged.
+#   - Consents + Approvals: the governmental and third-party consents-and-approvals representation or
+#     closing condition (77% / 48% of rows); consent-to-assignment rows are 1%. Merged.
+#   - Taxes vs Withholdings: tax covenants, gross-ups and tax treatment (70% of "Taxes" rows) are a
+#     different obligation from withholding on payments. NOT merged; Withholdings + Tax Withholdings are.
+#   - Fees vs Expenses: a fee is consideration owed (agent, commitment, management fees); an expenses
+#     clause allocates who bears costs. NOT merged; Expenses + Costs are.
+#   - Venue vs jurisdiction: venue fixes the place of suit, jurisdiction the court's power / the parties'
+#     submission; often one section but different concepts and 0-6% mutual confusion. NOT merged.
+#   - Remedies vs Specific Performance vs Enforcements: cumulative-remedies clauses, equitable-relief
+#     clauses and enforcement provisions are different concepts (3-6% mutual). NOT merged.
+#   - Miscellaneous vs General: both catch-all headings, but the rows differ in substance and the
+#     baseline separates them (0.9% mutual). NOT merged.
+#   - Term vs Termination, Assignment vs Successors and Assigns, Binding Effect vs Enforceability,
+#     Cooperation vs Further Assurances, Compliance With Laws vs Governing Laws: related or co-located
+#     sections with distinct legal meaning. NOT merged.
+#
+# Measured on the first training run (LoRA, 100 labels, stopped at step 1,288) using its step-1,000
+# validation confusion matrix (3,000 rows, same checkpoint):
+#   100 labels: 82.97% accuracy  ->  78 clause types: 88.5% accuracy  (see MEMORY.md)
 #
 # Used when `data.label_groups` in the training config points here; set it to null to train on the
 # original 100 labels. Every original label not listed below keeps its own name.
-# Format: <canonical name>: [<original LEDGAR labels>]
+# Format: <canonical name>: [<original LEDGAR labels>]   (evidence: TF-IDF mutual confusion, share of errors)
 
 groups:
-  Governing Laws: [Governing Laws, Applicable Laws]
-  Taxes and Withholdings: [Taxes, Withholdings, Tax Withholdings]
-  Representations and Warranties: [Representations, Warranties]
-  Definitions: [Definitions, Defined Terms]
-  Entire Agreements: [Entire Agreements, Integration]
-  Construction: [Construction, Interpretations]
-  Authority: [Authority, Authorizations]
-  Successors and Assigns: [Successors, Assigns, Binding Effects]
-  Indemnifications: [Indemnifications, Indemnity]
-  Organization and Existence: [Organizations, Existence, Qualifications]
-  Amendments: [Amendments, Modifications]
-  Fees and Expenses: [Fees, Expenses, Costs]
-  Jurisdiction and Venue: [Jurisdictions, Submission To Jurisdiction, Consent To Jurisdiction, Venues]
-  Waivers: [Waivers, No Waivers]
-  Effectiveness: [Effectiveness, Effective Dates]
-  Duties and Positions: [Duties, Positions]
-  Books and Records: [Books, Records]
-  Consents and Approvals: [Consents, Approvals]
-  Sanctions and Anti-Corruption Laws: [Sanctions, Anti-Corruption Laws]
-  Remedies: [Remedies, Specific Performance, Enforcements]
-  Miscellaneous: [Miscellaneous, General]
+  Governing Laws: [Governing Laws, Applicable Laws]                       # 10.5%, 78% of errors; "Applicable Laws" rows are governing-law clauses
+  Withholdings: [Withholdings, Tax Withholdings]                          # 19.4%, 79%
+  Representations and Warranties: [Representations, Warranties]          # 11.7%, 39%; one clause type ("representations and warranties")
+  Definitions: [Definitions, Defined Terms]                               # 17.6%, 78%
+  Entire Agreements: [Entire Agreements, Integration]                     # 4.1% (large class), 62% of Integration's errors
+  Construction: [Construction, Interpretations]                           # 7.4%; both are rules-of-construction clauses
+  Authority: [Authority, Authorizations]                                  # 13.1%, 56%; "power and authority / duly authorized"
+  Successors and Assigns: [Successors, Assigns, Binding Effects]          # 10.3% (Successors/Binding Effects); identical "binding upon successors and assigns" wording; Assigns has 31 rows
+  Indemnifications: [Indemnifications, Indemnity]                         # 11.2%, 62%
+  Organization and Existence: [Organizations, Existence, Qualifications]  # 5.7% / 5.3%; Existence errors 5/5 and Qualifications 4/6 go to Organizations
+  Amendments: [Amendments, Modifications]                                 # 5.7%, 53% of Modifications' errors
+  Expenses: [Expenses, Costs]                                             # 4.7%; Costs errors 7/11 go to Expenses; same "bear its own expenses" clause
+  Jurisdiction: [Jurisdictions, Submission To Jurisdiction, Consent To Jurisdiction]   # 9-15% pairwise
+  Waivers: [Waivers, No Waivers]                                          # 8.3%; No Waivers errors 16/16 go to Waivers; "Waivers" rows are no-waiver clauses
+  Effectiveness: [Effectiveness, Effective Dates]                         # 5.7%; Effectiveness errors 6/16 go to Effective Dates
+  Duties and Positions: [Duties, Positions]                               # 6.3%; the "Position and Duties" employment section
+  Books and Records: [Books, Records]                                     # same "books and records" clause; Books has only 23 rows
+  Consents and Approvals: [Consents, Approvals]                           # 6.0%; Approvals errors 4/9 go to Consents
+  Sanctions and Anti-Corruption Laws: [Sanctions, Anti-Corruption Laws]   # 18.0%, 56%; one compliance covenant naming both
