@@ -33,3 +33,18 @@ def test_collate_pads_right_and_keeps_index():
     assert batch["input_ids"].tolist() == [[1, 2, 3], [4, 0, 0]]
     assert batch["attention_mask"].tolist() == [[1, 1, 1], [1, 0, 0]]
     assert torch.equal(batch["index"], torch.tensor([10, 20]))
+
+
+def test_recorder_sessions(tmp_path):
+    from classification.telemetry import RunRecorder
+
+    rec = RunRecorder(tmp_path)
+    rec.write_meta({"a": 1}, new_session=True)
+    rec.write_meta({"summary": {"x": 1}})
+    rec2 = RunRecorder(tmp_path)  # a resumed process
+    rec2.write_meta({"a": 2}, new_session=True)
+    import json
+
+    meta = json.loads((tmp_path / "telemetry" / "meta.json").read_text())
+    assert [s["resumed"] for s in meta["sessions"]] == [False, True]
+    assert meta["a"] == 2 and meta["summary"] == {"x": 1}

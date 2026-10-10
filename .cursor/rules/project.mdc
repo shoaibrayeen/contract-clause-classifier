@@ -1,0 +1,15 @@
+---
+description: Project rules for the contract clause classifier (applies to every request)
+globs:
+alwaysApply: true
+---
+
+Follow the repository rules in AGENTS.md at the project root: commands, layout, rules and gotchas.
+Read MEMORY.md for design decisions and known pitfalls, and docs/TELEMETRY.md before touching telemetry.
+
+Key reminders:
+- Run Python with `uv run`; Python 3.12 with exact pins. Never start full training unless asked; use `make sanity`.
+- Keep training device-agnostic (cuda / mps / cpu via config.resolve_device).
+- Keep the API OpenAI-compatible and the prediction shape `[{name, confidence}]`.
+- `make test` must pass; tests use a stub model (no downloads, no GPU).
+- Update CHANGELOG.md and, for decisions or gotchas, MEMORY.md.

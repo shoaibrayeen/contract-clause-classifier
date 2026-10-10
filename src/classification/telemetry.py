@@ -203,13 +203,18 @@ class RunRecorder:
         record.setdefault("time", time.time())
         fh.write(json.dumps(record) + "\n")
 
-    def write_meta(self, meta: dict) -> None:
+    def write_meta(self, meta: dict, new_session: bool = False) -> None:
+        """Merge `meta` into meta.json. `new_session=True` (once per process start) logs a session entry."""
         if not self.enabled:
             return
         path = self.dir / "meta.json"
-        existing = json.loads(path.read_text()) if path.exists() else {}
-        existing.setdefault("sessions", []).append({"started": time.time(), "resumed": bool(existing)})
+        existed = path.exists()
+        existing = json.loads(path.read_text()) if existed else {}
+        sessions = existing.get("sessions", [])
+        if new_session:
+            sessions.append({"started": time.time(), "resumed": existed})
         existing.update({k: v for k, v in meta.items() if k != "sessions"})
+        existing["sessions"] = sessions
         path.write_text(json.dumps(existing, indent=2, default=_jsonable))
 
     def step(self, **record) -> None:

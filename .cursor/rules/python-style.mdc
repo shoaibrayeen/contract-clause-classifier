@@ -1,0 +1,12 @@
+---
+description: Python style for src/, scripts/ and tests/
+globs: ["src/**/*.py", "scripts/**/*.py", "tests/**/*.py"]
+alwaysApply: false
+---
+
+- Python 3.12, type hints, `from __future__ import annotations`, module docstring at the top.
+- Config: dataclasses in src/classification/config.py, mirrored in configs/*.yaml with comments.
+- API schemas: pydantic models in src/classification/api/schemas.py; errors via api/errors.APIError.
+- Resolve relative paths with config.resolve_path (project root), not the CWD.
+- Import training-only packages (peft, sklearn) lazily inside functions.
+- CLI scripts are thin Typer wrappers over the package; logic lives in src/.

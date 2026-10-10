@@ -24,8 +24,8 @@ train:
   run_name: ledgar-qwen3-0.6b-lora
   output_dir: artifacts/runs
   epochs: 2                 # ~2 h/epoch on M4 Pro (MPS), ~15-25 min/epoch on a modern CUDA GPU
-  batch_size: 8
-  grad_accum: 4             # effective batch 32
+  batch_size: 4             # micro-batch; 4 keeps MPS memory ~20 GB (8 -> ~35 GB and swapping on 48 GB)
+  grad_accum: 8             # effective batch 32
   lr: 2.0e-4
   weight_decay: 0.01
   warmup_ratio: 0.03

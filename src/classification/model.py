@@ -119,8 +119,18 @@ def export_merged(checkpoint_dir: str | Path, out_dir: str | Path, dtype: torch.
     for extra in (LABELS_FILE, CALIBRATION_FILE):
         if (checkpoint_dir / extra).exists():
             (out_dir / extra).write_bytes((checkpoint_dir / extra).read_bytes())
+    make_readable(out_dir)
     log.info("Exported merged model to %s", out_dir)
     return out_dir
+
+
+def make_readable(directory: str | Path) -> None:
+    """safetensors are written via a 0600 temp file; make them readable by other users (e.g. Docker's app user)."""
+    for f in Path(directory).rglob("*"):
+        if f.is_file():
+            f.chmod(0o644)
+        elif f.is_dir():
+            f.chmod(0o755)
 
 
 def save_calibration(model_dir: str | Path, temperature: float, **extra) -> None:

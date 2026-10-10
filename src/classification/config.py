@@ -48,8 +48,8 @@ class TrainConfig:
     run_name: str = "ledgar-qwen3-0.6b-lora"
     output_dir: str = "artifacts/runs"
     epochs: float = 2.0
-    batch_size: int = 8
-    grad_accum: int = 4
+    batch_size: int = 4
+    grad_accum: int = 8
     lr: float = 2e-4
     weight_decay: float = 0.01
     warmup_ratio: float = 0.03

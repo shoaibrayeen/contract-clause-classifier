@@ -55,7 +55,9 @@ class HFBackend:
         self.temperature = load_temperature(model_dir)
         self.batch_size = batch_size
         self.max_len = max_len
-        self.model_id = model_dir.resolve().name
+        resolved = model_dir.resolve()
+        # artifacts/runs/<run>/merged -> use the run name as the model fingerprint
+        self.model_id = resolved.parent.name if resolved.name == "merged" else resolved.name
         log.info("Loaded %s on %s (T=%.3f, %d labels)", model_dir, self.device, self.temperature, len(self.label_names))
 
     def count_tokens(self, text: str) -> int:

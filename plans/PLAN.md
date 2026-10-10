@@ -157,3 +157,27 @@ contract-clause-classifier/
 - LexGLUE / LEDGAR: https://arxiv.org/pdf/2110.00976 , https://github.com/coastalcph/lex-glue , https://huggingface.co/datasets/coastalcph/lex_glue , https://aclanthology.org/2020.lrec-1.155
 - Model: https://huggingface.co/Qwen/Qwen3-0.6B-Base
 - Alternatives reviewed and rejected: https://huggingface.co/datasets/dvgodoy/CUAD_v1_Contract_Understanding_clause_classification , https://huggingface.co/datasets/mteb/UnfairTOSLegalBenchClassification , https://huggingface.co/litillabs/litil-clause-classifier
+
+---
+
+## Implementation status (2026-10-11)
+
+Implemented as planned, with these changes made during the build (owner requests or measurements):
+
+| Area | Plan | Built | Why |
+|---|---|---|---|
+| Package | `src/clauseclf` | `src/classification` | owner request |
+| Project folder | `domain_models` | `contract-clause-classifier` | owner request |
+| Data caching | `datasets.save_to_disk` | pyarrow parquet cache (no `datasets` dependency) | lighter, same function |
+| Batch | 8 × accum 4 | 4 × accum 8 (effective 32 unchanged) | batch 8 drove MPS to ~35 GB and swapped on 48 GB |
+| Epochs | 3 | 2 | ~2.3 h/epoch on M4 Pro; LEDGAR converges in 2-3 |
+| In-training eval | full 10k validation | fixed 3,000 subset | keeps each eval near a minute; final eval uses full splits |
+| Precision on MPS | bf16 option | fp32 by default | bf16 autocast measured no faster on MPS |
+| Telemetry | not in plan | full per-step / per-layer / per-eval / probe-snapshot / system recording + live dashboard | owner request: watch training live and visualise later |
+| Visualisation | not in plan | `scripts/06_render_gif.py`, GIFs in `demo/` | owner request |
+| Commands | separate scripts | plus a `Makefile` (`make all`) | one-command pipeline for the owner |
+| Agent docs | not in plan | `AGENTS.md`, `CLAUDE.md`, `.cursor/rules/`, `MEMORY.md`, `CHANGELOG.md` | owner request |
+| Dependency pins | `>=` | exact `==` pins, Python 3.12 | owner request: stable versions |
+| `/v1/labels` | not in plan | added | lists the 100 clause types |
+
+Verified: 28 tests pass; sanity training learns (val acc 0.8% → 17.6% in 64 steps); resume works; merged export, evaluation/calibration, CLI on txt/pdf/docx, native API and the OpenAI SDK, and the Docker image (health, chat, HEALTHCHECK healthy) all work. Full training is left for the owner to run (`make all`).

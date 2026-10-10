@@ -251,7 +251,7 @@ class Trainer:
                 "eval_subset_size": len(val_loader.dataset),
             },
             "probe": {"split": "validation", "indices": self.probe_idx, "labels": self.probe_labels},
-        })
+        }, new_session=True)
         # Per-layer ("node") vectors for a small stratified subset of the probe set.
         seen: dict[int, int] = {}
         self.layer_subset = []
