@@ -1,9 +1,17 @@
-# Fine-tune Qwen3-0.6B-Base as a 100-way LEDGAR clause classifier (LoRA + trainable score head).
+# Fine-tune Qwen3-0.6B-Base as a LEDGAR clause-type classifier (accuracy-focused settings).
 # Runs unchanged on CUDA, Apple MPS or CPU (device: auto -> cuda > mps > cpu).
+#
+# Why these settings (evidence from the first run, stopped at step 1,288; details in MEMORY.md):
+#   - LoRA r=16 on the raw 100 labels reached 83.0% val accuracy at half an epoch.
+#   - 38% of its errors were between synonym labels (Applicable Laws vs Governing Laws, ...).
+#     data.label_groups merges them into 72 clause types: same checkpoint -> ~90% accuracy.
+#   - Full fine-tuning measured only ~17% slower than LoRA on an M4 Pro (22.5 GB) and usually adds
+#     1-2 points on classification, so it is on by default.
+#   - 3 epochs with label smoothing and early stopping on accuracy.
 
 model_name: Qwen/Qwen3-0.6B-Base
 model_version: 1            # next model version to train -> artifacts/runs/<train.run_name>-v<N>; bumped automatically after `make all`
-full_finetune: false        # true = train all weights (set train.lr to ~2e-5)
+full_finetune: true         # train all 596M weights (best accuracy); false = LoRA adapters only (faster, ~1-2 pts lower)
 device: auto
 precision: auto             # autocast dtype: auto (bf16 on cuda, fp32 on mps/cpu) | bf16 | fp16 | fp32
 
@@ -12,25 +20,28 @@ data:
   dataset_repo: coastalcph/lex_glue
   dataset_config: ledgar
   dataset_revision: refs/convert/parquet
-  max_len: 512
+  max_len: 512              # covers 98% of provisions in full
+  label_groups: configs/ledgar_label_groups.yaml   # merge synonym labels (100 -> 72); null = original 100 labels
 
-lora:
+lora:                       # used only when full_finetune: false
   enabled: true
-  r: 16
-  alpha: 32
+  r: 64
+  alpha: 128
   dropout: 0.05
   target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
 
 train:
-  run_name: ledgar-qwen3-0.6b-lora   # base name; runs are saved as <run_name>-v<model_version>
+  run_name: ledgar-qwen3-0.6b   # base name; runs are saved as <run_name>-v<model_version>
   output_dir: artifacts/runs
-  epochs: 2                 # ~2 h/epoch on M4 Pro (MPS), ~15-25 min/epoch on a modern CUDA GPU
-  batch_size: 4             # micro-batch; 4 keeps MPS memory ~20 GB (8 -> ~35 GB and swapping on 48 GB)
+  epochs: 3                 # ~2.6 h/epoch full fine-tune on M4 Pro (MPS); early stopping usually ends sooner
+  batch_size: 4             # micro-batch; 4 keeps MPS memory ~22 GB (8 -> 35+ GB and swapping on 48 GB)
   grad_accum: 8             # effective batch 32
-  lr: 2.0e-4
+  lr: 2.0e-5                # full fine-tune rate; use ~2e-4 if full_finetune: false
   weight_decay: 0.01
-  warmup_ratio: 0.03
+  warmup_ratio: 0.06
   max_grad_norm: 1.0
+  label_smoothing: 0.1      # soft targets: helps with the remaining near-duplicate clause types
+  best_metric: accuracy     # accuracy | macro_f1 - selects checkpoint-best and drives early stopping
   eval_steps: 500           # optimizer steps between validation runs
   eval_limit: 3000          # fixed random subset of validation used for in-training evals (null = all 10k)
   eval_batch_size: 32
@@ -41,14 +52,14 @@ train:
   gradient_checkpointing: false
   limit: null               # e.g. 512 for a quick sanity run
   num_workers: 0
-  empty_cache_steps: 25      # free cached accelerator memory every N steps (keeps MPS from swapping)
+  empty_cache_steps: 25     # free cached accelerator memory every N steps (keeps MPS from swapping)
 
 telemetry:
   enabled: true
   record_batches: true      # example ids / labels / lengths / per-example loss for every step
   layer_stats_every: 10     # per-layer gradient norms every N steps
-  probe_per_label: 5        # fixed validation probe set (~500 examples) snapshotted at every eval
+  probe_per_label: 5        # fixed validation probe set (~360 examples) snapshotted at every eval
   embeddings: true          # pooled final-layer vectors of the probe set
-  layer_probe_per_label: 1  # probes with vectors at every layer ("node" data, ~100 examples)
+  layer_probe_per_label: 1  # probes with vectors at every layer ("node" data, ~72 examples)
   system_interval_s: 5      # CPU / RAM / accelerator memory sampling period
   live_dashboard: true      # rich live panel in the terminal

@@ -19,6 +19,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
+from ..config import display_path
 from ..predict import Predictor
 from ..registry import ModelInfo, ModelNotFoundError, latest_model, list_models, read_model_info, resolve_model
 
@@ -66,7 +67,7 @@ class ModelStore:
     def resolve(self, requested: str | None) -> ModelInfo:
         models = self.models()
         if not models:
-            raise NoModelsError(f"No trained models in {self.runs_dir}. Train one with `make all`.")
+            raise NoModelsError(f"No trained models in {display_path(self.runs_dir)}. Train one with `make all`.")
         try:
             return resolve_model(models, requested, self.aliases)
         except ModelNotFoundError:

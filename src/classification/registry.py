@@ -75,6 +75,12 @@ class ModelInfo:
 
 # --------------------------------------------------------------------------- names
 
+def _short(p: Path) -> str:
+    from .config import display_path  # local import: registry stays importable without torch-heavy config
+
+    return display_path(p)
+
+
 def split_name(name: str) -> tuple[str, int | None]:
     """'ledgar-qwen3-0.6b-lora-v3' -> ('ledgar-qwen3-0.6b-lora', 3); 'sanity' -> ('sanity', None)."""
     m = VERSION_RE.match(name)
@@ -260,7 +266,7 @@ def plan_training_run(runs_dir: str | Path, base_name: str, version: int, resume
                 notes.append(f"Discarded the unfinished run {name} and starting it again.")
                 return name, v, notes
             raise UnfinishedRunError(
-                f"{name} exists but did not finish ({d}).\n"
+                f"{name} exists but did not finish ({_short(d)}).\n"
                 f"  Continue it:          make resume\n"
                 f"  Discard and restart:  make restart"
             )

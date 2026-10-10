@@ -10,7 +10,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from classification.config import load_config
+from classification.config import display_path, load_config
 from classification.data import SPLITS, download_ledgar, get_label_names, length_stats, load_tokenized
 
 app = typer.Typer(add_completion=False)
@@ -27,7 +27,7 @@ def main(
     cfg = load_config(config)
     paths = download_ledgar(cfg.data, force=force)
     names = get_label_names(cfg.data)
-    console.print(f"[green]Downloaded[/] {', '.join(f'{k}={v}' for k, v in paths.items())}")
+    console.print(f"[green]Downloaded[/] {', '.join(f'{k}={display_path(v)}' for k, v in paths.items())}")
     console.print(f"[green]{len(names)} labels[/], e.g. {names[:5]} ...")
     if skip_tokenize:
         return

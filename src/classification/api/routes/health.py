@@ -8,6 +8,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from ... import __version__
+from ...config import display_path
 from ..schemas import Health
 
 router = APIRouter(tags=["health"])
@@ -23,7 +24,7 @@ def health(request: Request):
     latest_pred = loaded.get(latest.id) if latest else None
     detail = store.last_error
     if latest is None:
-        detail = detail or f"No trained models in {store.runs_dir}. Train one with `make all`."
+        detail = detail or f"No trained models in {display_path(store.runs_dir)}. Train one with `make all`."
     body = Health(
         status="ok" if latest_pred else "unavailable",
         model_loaded=latest_pred is not None,
@@ -32,7 +33,7 @@ def health(request: Request):
         latest_version=latest.version if latest else None,
         available_models=[m.id for m in models],
         loaded_models=list(loaded),
-        models_dir=str(store.runs_dir),
+        models_dir=display_path(store.runs_dir),
         device=getattr(latest_pred.backend, "device", None) if latest_pred else None,
         num_labels=len(latest_pred.label_names) if latest_pred else None,
         uptime_s=round(time.time() - state.started_at, 3),

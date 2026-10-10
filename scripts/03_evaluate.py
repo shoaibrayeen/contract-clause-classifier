@@ -21,7 +21,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from classification.config import load_config, resolve_device, resolve_path
+from classification.config import display_path, load_config, resolve_device, resolve_path
 from classification.evaluate import fit_temperature, full_report, softmax, expected_calibration_error, split_logits
 from classification.labels import load_labels
 from classification.model import LABELS_FILE, load_trained, save_calibration
@@ -52,7 +52,7 @@ def main(
         except RegistryError as exc:
             console.print(f"[red]{exc}[/]")
             raise typer.Exit(code=2)
-    console.print(f"[bold]Evaluating[/] {model_dir}")
+    console.print(f"[bold]Evaluating[/] {display_path(model_dir)}")
     dev = resolve_device(device)
     clf, tok = load_trained(model_dir, dev)
     names = load_labels(model_dir / LABELS_FILE) if (model_dir / LABELS_FILE).exists() else [
@@ -71,7 +71,7 @@ def main(
             ece_before=expected_calibration_error(softmax(v_logits), v_labels),
             ece_after=expected_calibration_error(softmax(v_logits, temperature), v_labels),
         )
-        console.print(f"[green]Temperature[/] T={temperature:.4f} saved to {model_dir / 'calibration.json'}")
+        console.print(f"[green]Temperature[/] T={temperature:.4f} saved to {display_path(model_dir / 'calibration.json')}")
 
     logits, labels = split_logits(clf, tok, cfg.data, split, tok_name, dev, batch_size=batch_size, limit=limit)
     report = full_report(logits, labels, names, temperature)
@@ -96,7 +96,7 @@ def main(
     for row in report["top_confusions"][:10]:
         c.add_row(row["true"], row["pred"], str(row["count"]))
     console.print(c)
-    console.print(f"Full report: {model_dir / 'eval.json'}")
+    console.print(f"Full report: {display_path(model_dir / 'eval.json')}")
 
 
 if __name__ == "__main__":

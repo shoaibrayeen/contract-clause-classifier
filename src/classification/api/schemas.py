@@ -48,7 +48,7 @@ class ChatCompletionRequest(BaseModel):
     user: str | None = None
     top_k: int | None = Field(default=None, ge=1, le=100)
     threshold: float | None = Field(default=None, ge=0.0, le=1.0)
-    segment: bool | None = None
+    segment: bool | None = None  # split into provisions (default true); false = classify the input as one clause
 
 
 class ResponseMessage(BaseModel):
@@ -138,7 +138,8 @@ class DatasetItem(BaseModel):
     id: str
     text: str
     label_id: int
-    label: str
+    label: str                       # clause type the model is trained on (after label grouping)
+    original_label: str | None = None  # LEDGAR's original heading label
 
 
 class DatasetPage(BaseModel):

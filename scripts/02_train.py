@@ -21,7 +21,7 @@ from typing import Optional
 import typer
 from rich.console import Console
 
-from classification.config import load_config, resolve_path
+from classification.config import display_path, load_config, resolve_path
 from classification.registry import RegistryError, plan_training_run
 from classification.train import Trainer
 
@@ -74,7 +74,7 @@ def main(
     console.print(
         f"[bold green]Training model[/] [bold]{cfg.train.run_name}[/]"
         + (f" (version {version})" if version is not None else " (unversioned)")
-        + f" -> {resolve_path(cfg.train.output_dir) / cfg.train.run_name}"
+        + f" -> {display_path(resolve_path(cfg.train.output_dir) / cfg.train.run_name)}"
     )
     Trainer(cfg, resume=resume, version=version).fit()
 

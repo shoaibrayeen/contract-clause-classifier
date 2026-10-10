@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass
 import random
 import shutil
 import urllib.request
@@ -106,17 +107,91 @@ def ensure_data(cfg: DataConfig) -> None:
         download_ledgar(cfg)
 
 
-def load_split(cfg: DataConfig, split: str) -> tuple[list[str], list[int]]:
+def load_split(cfg: DataConfig, split: str, raw: bool = False) -> tuple[list[str], list[int]]:
+    """Texts and label ids; ids are mapped to the configured label space unless `raw`."""
     if split not in SPLITS:
         raise ValueError(f"split must be one of {SPLITS}, got {split!r}")
     ensure_data(cfg)
     table = pq.read_table(split_path(cfg, split), columns=["text", "label"])
-    return table.column("text").to_pylist(), table.column("label").to_pylist()
+    labels = table.column("label").to_pylist()
+    return table.column("text").to_pylist(), (labels if raw else get_label_space(cfg).map(labels))
+
+
+def get_raw_label_names(cfg: DataConfig) -> list[str]:
+    """The dataset's original label names (100 for LEDGAR)."""
+    ensure_data(cfg)
+    return load_labels(labels_path(cfg))
+
+
+# --------------------------------------------------------------------------- label space
+
+@dataclass
+class LabelSpace:
+    """Original dataset labels -> the labels the model is trained on (identical unless groups are set)."""
+
+    names: list[str]                 # model labels, in a stable order
+    raw_names: list[str]             # original dataset labels
+    raw_to_id: list[int]             # original label id -> model label id
+    groups: dict[str, list[str]]     # canonical name -> original names (only merged groups)
+    source: str | None = None        # path of the groups file
+
+    def map(self, raw_ids: Sequence[int]) -> list[int]:
+        return [self.raw_to_id[int(i)] for i in raw_ids]
+
+    def name_of_raw(self, raw_id: int) -> str:
+        return self.names[self.raw_to_id[int(raw_id)]]
+
+
+def build_label_space(raw_names: list[str], groups: dict[str, list[str]] | None = None,
+                      source: str | None = None) -> LabelSpace:
+    groups = groups or {}
+    known = set(raw_names)
+    owner: dict[str, str] = {}
+    for canon, members in groups.items():
+        for member in members:
+            if member not in known:
+                raise ValueError(f"Label group '{canon}' lists unknown label '{member}'")
+            if member in owner:
+                raise ValueError(f"Label '{member}' is in two groups: '{owner[member]}' and '{canon}'")
+            owner[member] = canon
+    names: list[str] = []
+    index: dict[str, int] = {}
+    raw_to_id: list[int] = []
+    for raw in raw_names:  # order of first appearance keeps ids stable and deterministic
+        canon = owner.get(raw, raw)
+        if canon not in index:
+            index[canon] = len(names)
+            names.append(canon)
+        raw_to_id.append(index[canon])
+    return LabelSpace(names=names, raw_names=list(raw_names), raw_to_id=raw_to_id,
+                      groups={k: list(v) for k, v in groups.items()}, source=source)
+
+
+def load_label_groups(path: str | Path) -> dict[str, list[str]]:
+    import yaml
+
+    data = yaml.safe_load(Path(path).read_text()) or {}
+    groups = data.get("groups", data)
+    if not isinstance(groups, dict):
+        raise ValueError(f"{path}: expected a 'groups' mapping of canonical name -> [labels]")
+    return {str(k): [str(x) for x in v] for k, v in groups.items()}
+
+
+_LABEL_SPACES: dict[tuple, LabelSpace] = {}
+
+
+def get_label_space(cfg: DataConfig) -> LabelSpace:
+    groups_path = str(resolve_path(cfg.label_groups)) if cfg.label_groups else None
+    key = (str(resolve_path(cfg.data_dir)), cfg.dataset_config, groups_path)
+    if key not in _LABEL_SPACES:
+        groups = load_label_groups(groups_path) if groups_path else None
+        _LABEL_SPACES[key] = build_label_space(get_raw_label_names(cfg), groups, groups_path)
+    return _LABEL_SPACES[key]
 
 
 def get_label_names(cfg: DataConfig) -> list[str]:
-    ensure_data(cfg)
-    return load_labels(labels_path(cfg))
+    """Labels the model is trained on (merged when `data.label_groups` is set)."""
+    return get_label_space(cfg).names
 
 
 # --------------------------------------------------------------------------- tokenisation
@@ -140,19 +215,24 @@ def cache_path(cfg: DataConfig, split: str, tokenizer_name: str) -> Path:
 
 
 def load_tokenized(cfg: DataConfig, split: str, tokenizer, tokenizer_name: str) -> tuple[list[list[int]], list[int]]:
-    """Tokenise a split once and cache it as parquet (list<int32> column)."""
+    """Tokenise a split once and cache it as parquet (list<int32> column).
+
+    The cache stores the *original* label ids; they are mapped to the configured label space on load,
+    so changing `data.label_groups` never requires re-tokenising.
+    """
     path = cache_path(cfg, split, tokenizer_name)
+    space = get_label_space(cfg)
     if path.exists():
         t = pq.read_table(path)
-        return t.column("input_ids").to_pylist(), t.column("label").to_pylist()
-    texts, labels = load_split(cfg, split)
+        return t.column("input_ids").to_pylist(), space.map(t.column("label").to_pylist())
+    texts, labels = load_split(cfg, split, raw=True)
     ids = tokenize_texts(tokenizer, texts, cfg.max_len)
     path.parent.mkdir(parents=True, exist_ok=True)
     pq.write_table(
         pa.table({"input_ids": pa.array(ids, type=pa.list_(pa.int32())), "label": pa.array(labels, pa.int32())}),
         path,
     )
-    return ids, labels
+    return ids, space.map(labels)
 
 
 def length_stats(ids: Sequence[Sequence[int]], max_len: int) -> dict[str, float]:
@@ -279,10 +359,14 @@ class DatasetStore:
     def page(self, split: str, offset: int, limit: int) -> dict:
         table = self.table(split)
         total = table.num_rows
-        names = self.labels()
+        space = get_label_space(self.cfg)
         rows = table.slice(offset, limit).to_pylist() if offset < total else []
         items = [
-            {"id": f"{split}-{offset + i}", "text": r["text"], "label_id": int(r["label"]), "label": names[int(r["label"])]}
+            {
+                "id": f"{split}-{offset + i}", "text": r["text"],
+                "label_id": space.raw_to_id[int(r["label"])], "label": space.name_of_raw(r["label"]),
+                "original_label": space.raw_names[int(r["label"])],
+            }
             for i, r in enumerate(rows)
         ]
         nxt = offset + len(items)

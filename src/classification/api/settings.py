@@ -21,6 +21,8 @@ class Settings:
     max_loaded_models: int = field(default_factory=lambda: int(_env("MAX_LOADED_MODELS", "2")))
     rescan_seconds: float = field(default_factory=lambda: float(_env("MODEL_RESCAN_SECONDS", "5")))
     data_dir: str = field(default_factory=lambda: _env("DATA_DIR", "data"))
+    # Label grouping used by /v1/dataset and /v1/labels (same file as data.label_groups in the training config).
+    label_groups: str | None = field(default_factory=lambda: _env("LABEL_GROUPS", "configs/ledgar_label_groups.yaml") or None)
     device: str = field(default_factory=lambda: _env("DEVICE", "auto"))
     top_k: int = field(default_factory=lambda: int(_env("TOP_K", "3")))
     threshold: float = field(default_factory=lambda: float(_env("THRESHOLD", "0.30")))

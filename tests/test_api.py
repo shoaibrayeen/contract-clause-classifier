@@ -230,3 +230,21 @@ def test_openai_sdk_selects_versions(versioned_client):
     assert sdk.chat.completions.create(model="latest", messages=msgs).model == "ledgar-qwen3-0.6b-lora-v2"
     assert sdk.chat.completions.create(model="ledgar-qwen3-0.6b-lora-v1", messages=msgs).model == "ledgar-qwen3-0.6b-lora-v1"
     assert [m.id for m in sdk.models.list().data][0] == "ledgar-qwen3-0.6b-lora-v2"
+
+
+def test_playground_page(client):
+    r = client.get("/playground")
+    assert r.status_code == 200 and "text/html" in r.headers["content-type"]
+    assert "Clause Classifier Playground" in r.text and "/v1/chat/completions" in r.text
+    root = client.get("/", follow_redirects=False)
+    assert root.status_code in (302, 307) and root.headers["location"] == "/playground"
+
+
+def test_short_multi_section_contract_is_split(client):
+    text = ("1. Confidentiality. Each party shall keep confidential information secret at all times.\n\n"
+            "2. Termination. Either party may terminate this agreement upon thirty days notice.")
+    r = client.post("/v1/chat/completions", json={"messages": [{"role": "user", "content": text}]})
+    result = json.loads(r.json()["choices"][0]["message"]["content"])
+    assert result["num_clauses"] == 2
+    one = client.post("/v1/chat/completions", json={"messages": [{"role": "user", "content": text}], "segment": False})
+    assert json.loads(one.json()["choices"][0]["message"]["content"])["num_clauses"] == 1

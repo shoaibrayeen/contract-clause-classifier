@@ -40,6 +40,8 @@ def build_model(cfg: Config, label_names: list[str], tokenizer: PreTrainedTokeni
         id2label=id2label(label_names),
         label2id=label2id(label_names),
         dtype=torch.float32,
+        # A base that already has a classification head with another label count gets a fresh head.
+        ignore_mismatched_sizes=True,
     )
     model.config.pad_token_id = tokenizer.pad_token_id
 

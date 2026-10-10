@@ -40,6 +40,7 @@ ERRORS = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 404: {"m
 def _card(info: ModelInfo, latest_id: str | None, loaded: bool) -> ModelCard:
     test = info.info.get("test") or {}
     metrics = {k: v for k, v in {
+        "best_val_accuracy": info.info.get("best_val_accuracy"),
         "best_val_macro_f1": info.info.get("best_val_macro_f1"),
         "test_accuracy": test.get("accuracy"), "test_macro_f1": test.get("macro_f1"),
     }.items() if v is not None} or None
@@ -100,7 +101,8 @@ def chat_completions(body: ChatCompletionRequest, request: Request) -> ChatCompl
     except Exception as exc:  # model files present but unloadable
         raise APIError(503, f"Model could not be loaded: {exc}", "model", "model_not_loaded") from exc
 
-    segment = body.segment if body.segment is not None else len(text.split()) > 350
+    # Splitting is safe for a single clause (it stays one provision), so it is on unless disabled.
+    segment = True if body.segment is None else body.segment
     result = predictor.predict_document(text, top_k=body.top_k, threshold=body.threshold, segment=segment)
     content = json.dumps(result, ensure_ascii=False)
     prompt_tokens = predictor.count_tokens(text)

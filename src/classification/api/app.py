@@ -20,7 +20,7 @@ from ..data import DatasetStore
 from ..predict import Predictor, load_predictor
 from .errors import install_error_handlers
 from .models import ModelStore, StaticModelStore
-from .routes import dataset, health, openai
+from .routes import dataset, health, openai, playground
 from .settings import Settings
 
 log = logging.getLogger("classification.api")
@@ -61,7 +61,8 @@ def create_app(settings: Settings | None = None, predictor: Predictor | None = N
     app.state.settings = settings
     app.state.models = model_store
     app.state.started_at = time.time()
-    app.state.dataset = dataset_store or DatasetStore(DataConfig(data_dir=settings.data_dir))
+    groups = settings.label_groups if settings.label_groups and resolve_path(settings.label_groups).exists() else None
+    app.state.dataset = dataset_store or DatasetStore(DataConfig(data_dir=settings.data_dir, label_groups=groups))
 
     app.add_middleware(
         CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"],
@@ -70,4 +71,5 @@ def create_app(settings: Settings | None = None, predictor: Predictor | None = N
     app.include_router(health.router)
     app.include_router(openai.router)
     app.include_router(dataset.router)
+    app.include_router(playground.router)
     return app

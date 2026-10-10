@@ -27,12 +27,13 @@ from rich.live import Live
 from rich.progress import Progress
 from torch.utils.data import DataLoader
 
-from .config import Config, resolve_autocast_dtype, resolve_device, resolve_path
+from .config import Config, display_path, resolve_autocast_dtype, resolve_device, resolve_path
 from .data import (
     LengthGroupedBatchSampler,
     TokenizedDataset,
     class_weights,
     get_label_names,
+    get_label_space,
     load_tokenized,
     make_collate,
 )
@@ -198,7 +199,7 @@ class Trainer:
 
         last_dir = self.run_dir / "checkpoint-last"
         best_dir = self.run_dir / "checkpoint-best"
-        state = {"global_step": 0, "best_macro_f1": -1.0, "bad_evals": 0}
+        state = {"global_step": 0, "best_score": -1.0, "best_macro_f1": -1.0, "best_accuracy": -1.0, "bad_evals": 0}
 
         model = build_model(cfg, label_names, tok)
         if self.resume and (last_dir / "trainer_state.json").exists():
@@ -225,7 +226,7 @@ class Trainer:
             scheduler.load_state_dict(torch.load(last_dir / "scheduler.pt"))
 
         weight = class_weights(train_labels, num_labels).to(self.device) if t.class_weighted_loss else None
-        loss_fn = torch.nn.CrossEntropyLoss(weight=weight)
+        loss_fn = torch.nn.CrossEntropyLoss(weight=weight, label_smoothing=t.label_smoothing)
 
         info = {
             "device": str(self.device),
@@ -250,6 +251,8 @@ class Trainer:
             "config": cfg.to_dict(),
             "environment": environment_info(self.device),
             "label_names": label_names,
+            "label_groups": {"source": cfg.data.label_groups, "groups": get_label_space(cfg.data).groups,
+                             "raw_label_names": get_label_space(cfg.data).raw_names},
             "model": {
                 "name": cfg.model_name, "num_layers": getattr(base_cfg, "num_hidden_layers", None),
                 "hidden_size": getattr(base_cfg, "hidden_size", None), **info,
@@ -289,7 +292,8 @@ class Trainer:
 
         dash = self.dashboard = TrainingDashboard(console, total_steps, global_step, label_names, str(self.run_dir))
         progress = dash.progress
-        live_ctx = Live(dash, console=console, refresh_per_second=2) if (tel.live_dashboard and dash.interactive) \
+        live_ctx = Live(dash, console=console, refresh_per_second=2, vertical_overflow="crop") \
+            if (tel.live_dashboard and dash.interactive) \
             else contextlib.nullcontext()
         with live_ctx:
             for epoch in range(start_epoch, math.ceil(t.epochs)):
@@ -405,7 +409,9 @@ class Trainer:
         write_model_info(
             merged, id=t.run_name, base_name=base if self.version is not None else t.run_name, version=self.version,
             base_model=cfg.model_name, method="full" if cfg.full_finetune or not cfg.lora.enabled else "lora",
-            best_val_macro_f1=state["best_macro_f1"], steps=global_step, train_examples=len(train_loader.dataset),
+            best_val_macro_f1=state["best_macro_f1"], best_val_accuracy=state.get("best_accuracy"),
+            best_metric=t.best_metric, num_labels=num_labels, label_groups=cfg.data.label_groups,
+            steps=global_step, train_examples=len(train_loader.dataset),
             run_dir=str(self.run_dir),
         )
         best_link = refresh_best_link(self.run_dir.parent)
@@ -414,11 +420,11 @@ class Trainer:
                    "best_link": str(best_link.readlink()) if best_link else None}
         self.log_event(**summary)
         rec.event("done", **summary)
+        console.print(f"[bold green]Model ready:[/] {t.run_name} -> {display_path(merged)}")
         rec.write_meta({"summary": summary})
         if self.monitor:
             self.monitor.stop()
         rec.close()
-        console.print(summary)
         return summary
 
     def _snapshot(self, model, tok, step: int, epoch: float) -> None:
@@ -450,9 +456,15 @@ class Trainer:
             rec.evaluation(step, epoch, m_eval, logits, labels, len(label_names), weight_norms_by_layer(model))
             if self.probe_ids:
                 self._snapshot(model, tok, step, epoch)
-        improved = m["macro_f1"] > state["best_macro_f1"]
+        metric = self.cfg.train.best_metric
+        if metric not in ("accuracy", "macro_f1"):
+            raise ValueError(f"train.best_metric must be 'accuracy' or 'macro_f1', got {metric!r}")
+        state.setdefault("best_score", state.get("best_macro_f1", -1.0))  # checkpoints from older versions
+        improved = m[metric] > state["best_score"]
         if improved:
+            state["best_score"] = m[metric]
             state["best_macro_f1"] = m["macro_f1"]
+            state["best_accuracy"] = m["accuracy"]
             state["bad_evals"] = 0
             save_checkpoint(model, tok, best_dir, label_names)
         else:

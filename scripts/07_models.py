@@ -17,7 +17,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from classification.config import load_config, resolve_path
+from classification.config import display_path, load_config, resolve_path
 from classification.registry import (
     RegistryError,
     adopt_run,
@@ -45,24 +45,25 @@ def list_cmd(config: Path = CONFIG) -> None:
     cfg, runs = _runs(config)
     models = list_models(runs)
     if not models:
-        console.print(f"No trained models in {runs}. Train one with `make all`.")
+        console.print(f"No trained models in {display_path(runs)}. Train one with `make all`.")
         return
     latest = latest_model(models)
-    t = Table(title=f"Models in {runs}")
-    for col in ("model", "version", "created", "val macro-F1", "test acc", "test macro-F1", ""):
+    t = Table(title=f"Models in {display_path(runs)}")
+    for col in ("model", "version", "created", "val acc", "val macro-F1", "test acc", "test macro-F1", ""):
         t.add_column(col)
     for m in models:
         test = m.info.get("test", {})
         t.add_row(
             m.id, str(m.version) if m.version is not None else "-",
             datetime.fromtimestamp(m.created).strftime("%Y-%m-%d %H:%M"),
+            f"{m.info['best_val_accuracy']:.4f}" if m.info.get("best_val_accuracy") is not None else "-",
             f"{m.info['best_val_macro_f1']:.4f}" if "best_val_macro_f1" in m.info else "-",
             f"{test['accuracy']:.4f}" if "accuracy" in test else "-",
             f"{test['macro_f1']:.4f}" if "macro_f1" in test else "-",
             "[green]latest[/]" if latest and m.id == latest.id else "",
         )
     console.print(t)
-    console.print(f"Next training run: model_version={cfg.model_version} in {config}")
+    console.print(f"Next training run: model_version={cfg.model_version} in {display_path(config)}")
 
 
 @app.command("next")
@@ -100,7 +101,7 @@ def bump_cmd(config: Path = CONFIG) -> None:
     if new == old:
         console.print(f"[yellow]model_version stays {old}[/]: {base}-v{old} has not completed yet.")
     else:
-        console.print(f"[green]model_version {old} -> {new}[/] in {config}. Next training run: {base}-v{new}")
+        console.print(f"[green]model_version {old} -> {new}[/] in {display_path(config)}. Next training run: {base}-v{new}")
 
 
 @app.command("adopt")

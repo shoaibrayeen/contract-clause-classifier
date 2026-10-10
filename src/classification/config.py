@@ -28,6 +28,9 @@ class DataConfig:
     dataset_config: str = "ledgar"
     dataset_revision: str = "refs/convert/parquet"
     max_len: int = 512
+    # YAML mapping canonical clause type -> [original LEDGAR labels] (see configs/ledgar_label_groups.yaml).
+    # None = train on the original 100 labels.
+    label_groups: str | None = None
 
 
 @dataclass
@@ -61,6 +64,8 @@ class TrainConfig:
     log_steps: int = 10
     seed: int = 42
     class_weighted_loss: bool = False
+    label_smoothing: float = 0.0  # 0.1 helps when some labels are near-synonyms
+    best_metric: str = "accuracy"  # accuracy | macro_f1: picks checkpoint-best and drives early stopping
     gradient_checkpointing: bool = False
     limit: int | None = None  # use only N training examples (sanity runs)
     num_workers: int = 0
@@ -125,6 +130,15 @@ def resolve_path(p: str | Path) -> Path:
     """Relative paths are resolved against the project root, not the CWD."""
     p = Path(p)
     return p if p.is_absolute() else PROJECT_ROOT / p
+
+
+def display_path(p: str | Path) -> str:
+    """Short path for console output: 'contract-clause-classifier/artifacts/runs/x' instead of '/Users/.../x'."""
+    p = Path(p)
+    try:
+        return str(p.resolve().relative_to(PROJECT_ROOT.parent.resolve()))
+    except ValueError:
+        return str(p)
 
 
 def resolve_device(name: str = "auto") -> torch.device:

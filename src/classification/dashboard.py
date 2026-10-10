@@ -1,10 +1,16 @@
-"""Live terminal dashboard for training (rich). Falls back to plain log lines when not a TTY."""
+"""Live terminal dashboard for training (rich). Falls back to plain log lines when not a TTY.
+
+The panel sizes itself to the terminal: if the live region were taller than the window, rich could
+not redraw it in place and every refresh would leave a copy behind (the "repeated boxes" effect).
+"""
 
 from __future__ import annotations
 
 from collections import Counter, deque
 
 from rich.console import Console, Group
+
+from .config import display_path
 from rich.panel import Panel
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn, TimeElapsedColumn, TimeRemainingColumn
 from rich.table import Table
@@ -26,7 +32,8 @@ class TrainingDashboard:
         self.console = console
         self.interactive = console.is_terminal
         self.label_names = label_names
-        self.run_dir = run_dir
+        self.run_dir = display_path(run_dir)
+        self.max_rows = 10  # clause types shown for the current batch / validation history
         self.progress = Progress(
             TextColumn("[bold]{task.description}"), BarColumn(), MofNCompleteColumn(),
             TextColumn("{task.fields[status]}"), TimeElapsedColumn(), TimeRemainingColumn(), console=console,
@@ -66,47 +73,54 @@ class TrainingDashboard:
 
     # ------------------------------------------------------------------ render
     def _stats_table(self) -> Table:
+        """Three label/value pairs per row keeps the stats block at 4 lines."""
         s, sy = self.stats, self.system
-        t = Table.grid(padding=(0, 2))
-        t.add_column(style="bold cyan")
-        t.add_column()
-        t.add_column(style="bold cyan")
-        t.add_column()
-        t.add_row("epoch", f"{s.get('epoch', 0):.3f}", "lr", f"{s.get('lr', 0):.2e}")
-        t.add_row("loss", f"{s.get('loss', 0):.4f}", "ema loss", f"{self.ema or 0:.4f}")
-        t.add_row("grad norm", f"{s.get('grad_norm', 0):.3f}{' (clipped)' if s.get('clipped') else ''}",
+        t = Table.grid(padding=(0, 2), expand=True)
+        for _ in range(3):
+            t.add_column(style="bold cyan", no_wrap=True)
+            t.add_column(no_wrap=True)
+        t.add_row("epoch", f"{s.get('epoch', 0):.3f}", "loss", f"{s.get('loss', 0):.4f}",
+                  "ema loss", f"{self.ema or 0:.4f}")
+        t.add_row("lr", f"{s.get('lr', 0):.2e}", "grad norm",
+                  f"{s.get('grad_norm', 0):.3f}{' (clipped)' if s.get('clipped') else ''}",
                   "batch acc", f"{s.get('batch_accuracy', 0):.3f}")
-        t.add_row("tokens/s", f"{s.get('tokens_per_s', 0):.0f}", "step time", f"{s.get('step_time_s', 0):.2f}s")
-        t.add_row("padding", f"{s.get('padding_ratio', 0):.1%}", "accel mem", f"{s.get('mem_gb', 0):.1f} GB")
-        t.add_row("cpu", f"{sy.get('cpu_percent', 0):.0f}%", "ram",
-                  f"{sy.get('ram_used_gb', 0):.1f}/{sy.get('ram_total_gb', 0):.0f} GB")
-        t.add_row("loss trend", sparkline(self.losses), "", "")
+        t.add_row("tokens/s", f"{s.get('tokens_per_s', 0):.0f}", "step time", f"{s.get('step_time_s', 0):.2f}s",
+                  "padding", f"{s.get('padding_ratio', 0):.1%}")
+        t.add_row("accel mem", f"{s.get('mem_gb', 0):.1f} GB", "cpu", f"{sy.get('cpu_percent', 0):.0f}%",
+                  "ram", f"{sy.get('ram_used_gb', 0):.1f}/{sy.get('ram_total_gb', 0):.0f} GB")
         return t
 
-    def _batch_table(self) -> Table:
+    def _rows_that_fit(self) -> int:
+        """Table rows that keep the whole panel inside the terminal (fixed chrome is 13 lines)."""
+        height = self.console.size.height if self.interactive else 40
+        return max(2, min(self.max_rows, height - 14))
+
+    def _batch_table(self, rows: int) -> Table:
         t = Table(title="Current batch: clause types flowing in", show_header=True, header_style="bold magenta",
                   expand=True)
-        t.add_column("label")
-        t.add_column("n", justify="right")
-        for lab, n in self.batch_labels.most_common(6):
+        t.add_column("label", no_wrap=True, overflow="ellipsis")
+        t.add_column("n", justify="right", no_wrap=True)
+        for lab, n in self.batch_labels.most_common(rows):
             t.add_row(self.label_names[lab] if lab < len(self.label_names) else str(lab), str(n))
         return t
 
-    def _eval_table(self) -> Table:
+    def _eval_table(self, rows: int) -> Table:
         t = Table(title="Validation", show_header=True, header_style="bold green", expand=True)
         for col in ("step", "acc", "macro-F1", "loss", ""):
-            t.add_column(col, justify="right")
-        for e in self.evals[-5:]:
+            t.add_column(col, justify="right", no_wrap=True)
+        for e in self.evals[-rows:]:
             t.add_row(str(e["step"]), f"{e['accuracy']:.4f}", f"{e['macro_f1']:.4f}", f"{e['loss']:.4f}",
                       "[green]best[/]" if e["improved"] else "")
         return t
 
     def __rich__(self):
+        rows = self._rows_that_fit()
         body = Table.grid(expand=True)
         body.add_column(ratio=1)
         body.add_column(ratio=1)
-        body.add_row(self._batch_table(), self._eval_table())
+        body.add_row(self._batch_table(rows), self._eval_table(rows))
+        trend = f"[bold cyan]loss trend[/]  {sparkline(self.losses, width=60)}"
         return Panel(
-            Group(self.progress, self._stats_table(), body),
-            title=f"[bold]Training[/] · {self.run_dir}", subtitle="telemetry -> <run>/telemetry/",
+            Group(self.progress, self._stats_table(), trend, body),
+            title=f"[bold]Training[/] · {self.run_dir}", subtitle=f"telemetry -> {self.run_dir}/telemetry",
         )

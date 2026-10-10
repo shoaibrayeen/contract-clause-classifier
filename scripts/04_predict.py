@@ -50,8 +50,8 @@ def main(
             raise typer.Exit(code=2)
     predictor = load_predictor(resolve_path(model_dir), device=device, top_k=top_k, threshold=threshold)
     typer.echo(f"model: {predictor.backend.model_id}", err=True)
-    # A single short clause should not be segmented.
-    segment = not no_segment and (text is None or len(content.split()) > 350)
+    # Splitting is safe for a single clause (it stays one provision), so it is on unless disabled.
+    segment = not no_segment
     result = predictor.predict_document(content, segment=segment)
     payload = json.dumps(result, indent=2, ensure_ascii=False)
     print(payload)

@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clause Classifier Playground</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --surface: #ffffff; --text: #141413; --muted: #5f5e5a; --faint: #8a8984;
+    --border: rgba(20,20,19,0.12); --accent: #185fa5; --accent-bg: #e6f1fb; --accent-strong: #0c447c;
+    --ok: #27500a; --ok-bg: #eaf3de; --warn: #633806; --warn-bg: #faeeda; --err: #791f1f; --err-bg: #fcebeb;
+    --bar: #2a78d6; --bar-track: #e8e7e2; --radius: 10px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161615; --surface: #20201f; --text: #efeee9; --muted: #c3c2b7; --faint: #8a8984;
+      --border: rgba(255,255,255,0.12); --accent: #85b7eb; --accent-bg: #0c2f52; --accent-strong: #b5d4f4;
+      --ok: #c0dd97; --ok-bg: #233d0b; --warn: #fac775; --warn-bg: #4a2c05; --err: #f7c1c1; --err-bg: #4f1515;
+      --bar: #3987e5; --bar-track: #33332f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #161615; --surface: #20201f; --text: #efeee9; --muted: #c3c2b7; --faint: #8a8984;
+    --border: rgba(255,255,255,0.12); --accent: #85b7eb; --accent-bg: #0c2f52; --accent-strong: #b5d4f4;
+    --ok: #c0dd97; --ok-bg: #233d0b; --warn: #fac775; --warn-bg: #4a2c05; --err: #f7c1c1; --err-bg: #4f1515;
+    --bar: #3987e5; --bar-track: #33332f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 var(--font); }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; }
+  h2 { font-size: 16px; font-weight: 600; margin: 0 0 10px; }
+  .sub { color: var(--muted); margin: 2px 0 0; font-size: 14px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); }
+  .pill.ok { color: var(--ok); background: var(--ok-bg); border-color: transparent; }
+  .pill.err { color: var(--err); background: var(--err-bg); border-color: transparent; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px; }
+  textarea { width: 100%; min-height: 280px; resize: vertical; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); }
+  select, input[type=number], input[type=password] { width: 100%; height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: inherit; }
+  input[type=range] { width: 100%; }
+  .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 12px 0; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button { height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; }
+  :root[data-theme="dark"] button.primary, .dark-primary { color: #0b1d33; }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  .hint { font-size: 12px; color: var(--faint); }
+  .error { color: var(--err); background: var(--err-bg); border-radius: 8px; padding: 10px 12px; font-size: 14px; margin-top: 12px; white-space: pre-wrap; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .meta b { color: var(--text); font-weight: 600; }
+  .bar-row { display: grid; grid-template-columns: minmax(120px, 42%) 1fr 56px; gap: 10px; align-items: center; margin: 6px 0; font-size: 14px; }
+  .bar-track { height: 10px; background: var(--bar-track); border-radius: 5px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--bar); border-radius: 5px; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .clause { border-top: 1px solid var(--border); padding: 10px 0; }
+  .clause:first-child { border-top: 0; }
+  .clause-text { font-size: 13px; color: var(--muted); margin: 0 0 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--accent-bg); color: var(--accent-strong); font-variant-numeric: tabular-nums; }
+  .chip.low { background: var(--warn-bg); color: var(--warn); }
+  .empty { color: var(--faint); font-size: 14px; padding: 24px 0; text-align: center; }
+  details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+  pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; overflow: auto; font: 12px/1.45 var(--mono); max-height: 320px; }
+  a { color: var(--accent); }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Clause Classifier Playground</h1>
+      <p class="sub">Paste a clause or a whole contract. The model splits it into provisions and predicts the clause type of each, with confidence.</p>
+    </div>
+    <div class="row">
+      <span id="status" class="pill" role="status"><span class="dot"></span>Checking model…</span>
+      <a class="pill" href="/docs">API docs</a>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section class="card" aria-labelledby="in-h">
+      <h2 id="in-h">Input</h2>
+      <label for="text">Contract or clause text</label>
+      <textarea id="text" placeholder="e.g. This Agreement shall be governed by and construed in accordance with the laws of the State of New York."></textarea>
+      <div class="row" style="margin-top:8px">
+        <span class="hint">Try:</span>
+        <button type="button" data-sample="clause">A clause</button>
+        <button type="button" data-sample="contract">A short contract</button>
+        <button type="button" id="clear">Clear</button>
+      </div>
+      <div class="controls">
+        <div>
+          <label for="model">Model</label>
+          <select id="model"><option value="latest">latest</option></select>
+        </div>
+        <div>
+          <label for="topk">Top-k per clause</label>
+          <input id="topk" type="number" min="1" max="10" step="1" value="3">
+        </div>
+        <div>
+          <label for="threshold">Min confidence <span id="thv">0.30</span></label>
+          <input id="threshold" type="range" min="0" max="1" step="0.05" value="0.30">
+        </div>
+        <div>
+          <label for="segment">Split into clauses</label>
+          <select id="segment">
+            <option value="on">Yes, per provision</option>
+            <option value="off">No, treat as one clause</option>
+          </select>
+        </div>
+      </div>
+      <div id="keybox" hidden>
+        <label for="apikey">API key (this server requires one)</label>
+        <input id="apikey" type="password" autocomplete="off" placeholder="Bearer token">
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button type="button" id="run" class="primary">Classify</button>
+        <span class="hint">Ctrl/Cmd + Enter</span>
+      </div>
+      <div id="err" class="error" hidden></div>
+    </section>
+
+    <section class="card" aria-labelledby="out-h" aria-live="polite">
+      <h2 id="out-h">Predictions</h2>
+      <div id="out"><p class="empty">Results appear here.</p></div>
+    </section>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const SAMPLES = {
+  clause: "This Agreement shall be governed by and construed in accordance with the laws of the State of New York, without giving effect to any choice or conflict of law provision.",
+  contract: `MASTER SERVICES AGREEMENT
+
+1. Confidentiality. Each party shall hold the other party's Confidential Information in strict confidence, shall not disclose it to any third party except to its employees and advisors who need to know it, and shall use it only to perform its obligations under this Agreement.
+
+2. Indemnification. Provider shall indemnify, defend and hold harmless Customer from and against any and all losses, damages, liabilities and expenses arising out of any third-party claim that the Services infringe any intellectual property right.
+
+3. Term and Termination. Either party may terminate this Agreement upon thirty (30) days' written notice if the other party materially breaches this Agreement and fails to cure such breach within the notice period.
+
+4. Notices. All notices under this Agreement shall be in writing and shall be deemed given when delivered personally or one business day after deposit with a nationally recognized overnight courier.
+
+5. Governing Law. This Agreement shall be governed by and construed in accordance with the laws of the State of New York.
+
+6. Counterparts. This Agreement may be executed in counterparts, each of which shall be deemed an original and all of which together shall constitute one instrument.`,
+};
+
+let apiKey = "";
+try { apiKey = sessionStorage.getItem("ccc_api_key") || ""; } catch (e) {}
+if (apiKey) { $("keybox").hidden = false; $("apikey").value = apiKey; }
+
+function headers() {
+  const h = { "Content-Type": "application/json" };
+  const k = $("apikey").value.trim();
+  if (k) h["Authorization"] = "Bearer " + k;
+  return h;
+}
+
+function el(tag, attrs = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v; else if (k === "style") n.style.cssText = v; else n.setAttribute(k, v);
+  }
+  for (const k of kids) n.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return n;
+}
+
+const pct = (x) => (x * 100).toFixed(1) + "%";
+
+async function loadHealth() {
+  const s = $("status");
+  try {
+    const r = await fetch("/health");
+    const h = await r.json();
+    if (h.status === "ok") {
+      s.className = "pill ok";
+      s.replaceChildren(el("span", { class: "dot" }), `Latest: ${h.latest_model} · ${h.device}`);
+    } else {
+      s.className = "pill err";
+      s.replaceChildren(el("span", { class: "dot" }), "No model loaded");
+      showError(h.detail || "No trained model is available yet. Train one with `make all`, then reload this page.");
+    }
+  } catch (e) {
+    s.className = "pill err";
+    s.replaceChildren(el("span", { class: "dot" }), "API unreachable");
+  }
+}
+
+async function loadModels() {
+  const sel = $("model");
+  try {
+    const r = await fetch("/v1/models", { headers: headers() });
+    if (r.status === 401) { $("keybox").hidden = false; return; }
+    const data = (await r.json()).data || [];
+    sel.replaceChildren(el("option", { value: "latest" }, "latest" + (data.find(m => m.is_latest) ? ` (${data.find(m => m.is_latest).id})` : "")));
+    for (const m of data) {
+      const acc = m.metrics && m.metrics.test_accuracy != null ? ` · test acc ${pct(m.metrics.test_accuracy)}` : "";
+      sel.append(el("option", { value: m.id }, `${m.id}${m.is_latest ? " ★" : ""}${acc}`));
+    }
+  } catch (e) { /* keep "latest" */ }
+}
+
+function showError(msg) { const e = $("err"); e.textContent = msg; e.hidden = false; }
+function clearError() { $("err").hidden = true; }
+
+function render(result, resp, ms) {
+  const out = $("out");
+  const usage = resp.usage || {};
+  const meta = el("div", { class: "meta" },
+    el("span", {}, "Model ", el("b", {}, resp.model)),
+    el("span", {}, "Clauses ", el("b", {}, result.num_clauses)),
+    el("span", {}, "Latency ", el("b", {}, `${ms} ms`)),
+    el("span", {}, "Tokens ", el("b", {}, usage.prompt_tokens ?? "-")));
+
+  const doc = el("div", {});
+  doc.append(el("h2", {}, "Clause types found"));
+  if (!result.document.length) {
+    doc.append(el("p", { class: "hint" }, "No clause type passed the confidence threshold. Lower it, or see the per-clause predictions below."));
+  }
+  for (const d of result.document) {
+    doc.append(el("div", { class: "bar-row" },
+      el("span", {}, d.name),
+      el("div", { class: "bar-track", role: "img", "aria-label": `${d.name} ${pct(d.confidence)}` },
+        el("div", { class: "bar-fill", style: `width:${Math.max(2, d.confidence * 100)}%` })),
+      el("span", { class: "num" }, pct(d.confidence))));
+  }
+
+  const clauses = el("div", { style: "margin-top:16px" }, el("h2", {}, "Per clause"));
+  for (const c of result.clauses) {
+    const chips = el("div", { class: "chips" });
+    for (const p of c.predictions) {
+      chips.append(el("span", { class: "chip" + (p.confidence < 0.5 ? " low" : "") }, `${p.name} · ${pct(p.confidence)}`));
+    }
+    clauses.append(el("div", { class: "clause" }, el("p", { class: "clause-text" }, `#${c.index + 1}  ${c.text}`), chips));
+  }
+
+  const raw = el("details", { style: "margin-top:12px" }, el("summary", {}, "Raw API response"),
+    el("pre", {}, JSON.stringify({ ...resp, choices: [{ ...resp.choices[0], message: { ...resp.choices[0].message, content: result } }] }, null, 2)));
+  out.replaceChildren(meta, doc, clauses, raw);
+}
+
+async function classify() {
+  clearError();
+  const text = $("text").value;
+  if (!text.trim()) { showError("Enter some contract text first."); $("text").focus(); return; }
+  const btn = $("run");
+  btn.disabled = true; btn.textContent = "Classifying…";
+  const seg = $("segment").value;  // "on" | "off" 
+  const body = {
+    model: $("model").value,
+    messages: [{ role: "user", content: text }],
+    top_k: Math.max(1, Math.min(10, parseInt($("topk").value || "3", 10))),
+    threshold: parseFloat($("threshold").value),
+  };
+  body.segment = seg === "on";
+  const t0 = performance.now();
+  try {
+    const r = await fetch("/v1/chat/completions", { method: "POST", headers: headers(), body: JSON.stringify(body) });
+    const resp = await r.json();
+    if (!r.ok) {
+      if (r.status === 401) $("keybox").hidden = false;
+      showError((resp.error && resp.error.message) || `Request failed (${r.status})`);
+      return;
+    }
+    try { sessionStorage.setItem("ccc_api_key", $("apikey").value.trim()); } catch (e) {}
+    render(JSON.parse(resp.choices[0].message.content), resp, Math.round(performance.now() - t0));
+  } catch (e) {
+    showError("Could not reach the API: " + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "Classify";
+  }
+}
+
+document.querySelectorAll("[data-sample]").forEach(b => b.addEventListener("click", () => { $("text").value = SAMPLES[b.dataset.sample]; clearError(); }));
+$("clear").addEventListener("click", () => { $("text").value = ""; $("out").replaceChildren(el("p", { class: "empty" }, "Results appear here.")); clearError(); });
+$("threshold").addEventListener("input", () => { $("thv").textContent = parseFloat($("threshold").value).toFixed(2); });
+$("run").addEventListener("click", classify);
+$("text").addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") classify(); });
+$("text").addEventListener("input", clearError);
+$("apikey").addEventListener("change", loadModels);
+loadHealth();
+loadModels();
+</script>
+</body>
+</html>
