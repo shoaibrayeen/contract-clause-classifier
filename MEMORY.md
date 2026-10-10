@@ -4,6 +4,9 @@ Project memory: decisions, measurements and gotchas that are not obvious from th
 
 ## Owner preferences
 
+- After finishing any task, update this file and CHANGELOG.md before reporting done (AGENTS.md rule 11). Agents for Claude, Codex and Cursor must all follow the same rules, kept in AGENTS.md. (2026-10-11)
+- README must show a sample response next to every curl, state what data the model is trained on, and carry a license plus the owner's contact (shoaibrayeen.me@gmail.com, https://shoaibrayeen.github.io/). (2026-10-11)
+
 - Training is started by the owner, not by agents. Agents provide the exact command (`make train` / `make all`) and verify changes with `make sanity`. (2026-10-11)
 - Use stable, exactly pinned library versions and Python 3.12. (2026-10-11)
 - Training must print progress live in the terminal and save every step for later visualisation (charts, GIF, video). (2026-10-11)
@@ -12,6 +15,10 @@ Project memory: decisions, measurements and gotchas that are not obvious from th
 - Rendered visuals go in `demo/`. Plans go in `plans/`. (2026-10-11)
 
 ## Design decisions
+
+- **License: Apache-2.0** (copyright 2026 Shoaib Rayeen). Matches Qwen3-0.6B-Base and the Hugging Face stack, permissive, includes a patent grant. LexGLUE/LEDGAR is CC BY 4.0 (attribution required), derived from public SEC EDGAR filings; the README's license table records all components. (2026-10-11)
+- **README sample responses come from the 5-minute sanity model** (low confidences, e.g. Governing Laws 0.81 on a clear clause, 0.56 on the sample contract). They were captured by serving on CPU on port 8011; regenerate them after a full training run. (2026-10-11)
+- `changelog.html` is a hand-written standalone page mirroring CHANGELOG.md; update both. (2026-10-11)
 
 - **Dataset: LEDGAR** via LexGLUE parquet (`coastalcph/lex_glue`, config `ledgar`, revision `refs/convert/parquet`; fallback mirror `lighteval/lexglue` via the datasets-server API). CUAD was explicitly excluded by the owner. LEDGAR is single-label per provision; multi-label output comes from segmentation + top-k. (2026-10-11)
 - **Model: Qwen3-0.6B-Base + LoRA** (r=16, alpha=32, all attention and MLP projections) with `modules_to_save=["score"]`. Base rather than instruct for a classification head. (2026-10-11)
@@ -33,6 +40,8 @@ Project memory: decisions, measurements and gotchas that are not obvious from th
 - Sanity run (256 examples, 64 steps): val accuracy 0.8% → 17.6%, proving the loop learns; training loss on a 256-example subset reaches about 0.0002 when run longer. (2026-10-11)
 
 ## Gotchas
+
+- `pyproject.toml` declares `license-files = ["LICENSE"]`, so the Dockerfile must `COPY LICENSE` before `pip install .` or the build fails. (2026-10-11)
 
 - `torch.mps` caching allocator grows with every new batch shape. `train.empty_cache_steps` (25) calls `torch.mps.empty_cache()`; it helps only briefly, so batch size is the real lever. (2026-10-11)
 - PEFT adapter checkpoints do not store the base config; loading with `AutoPeftModelForSequenceClassification` rebuilds a 2-label head and fails. `model.load_trained` builds the base with `num_labels` from `labels.json` first. (2026-10-11)

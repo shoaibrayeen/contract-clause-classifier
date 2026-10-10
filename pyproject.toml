@@ -3,6 +3,15 @@ name = "contract-clause-classifier"
 version = "0.1.0"
 description = "Contract clause-type classifier: fine-tune a ~0.6B LM (Qwen3-0.6B) on LEDGAR, serve via an OpenAI-compatible FastAPI."
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Shoaib Rayeen", email = "shoaibrayeen.me@gmail.com" }]
+keywords = ["contracts", "legal-nlp", "clause-classification", "ledgar", "qwen3", "lora", "fastapi", "openai-compatible"]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 requires-python = ">=3.12,<3.13"
 # Exact pins: the tested, stable combination. Upgrade deliberately (see CHANGELOG.md).
 # Runtime deps only (what the API / Docker image needs).
@@ -23,6 +32,11 @@ dependencies = [
     "python-docx==1.2.0",
     "psutil==7.2.2",
 ]
+
+[project.urls]
+Homepage = "https://shoaibrayeen.github.io/"
+Repository = "https://github.com/shoaibrayeen/contract-clause-classifier"
+Changelog = "https://github.com/shoaibrayeen/contract-clause-classifier/blob/master/CHANGELOG.md"
 
 [dependency-groups]
 # Training / evaluation only (not installed in the Docker image).

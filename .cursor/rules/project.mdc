@@ -12,4 +12,5 @@ Key reminders:
 - Keep training device-agnostic (cuda / mps / cpu via config.resolve_device).
 - Keep the API OpenAI-compatible and the prediction shape `[{name, confidence}]`.
 - `make test` must pass; tests use a stub model (no downloads, no GPU).
-- Update CHANGELOG.md and, for decisions or gotchas, MEMORY.md.
+- Update CHANGELOG.md for user-visible changes.
+- Always update MEMORY.md after completing a task (decisions, measurements, gotchas, dated) before reporting it done. A task is not complete until tests pass and docs, CHANGELOG.md and MEMORY.md are updated.

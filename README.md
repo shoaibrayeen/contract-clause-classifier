@@ -28,20 +28,23 @@ Training runs on **any machine** (Apple Silicon MPS, NVIDIA CUDA or CPU, auto-de
 ## Contents
 
 1. [How it works](#how-it-works)
-2. [Requirements](#requirements)
-3. [Setup](#setup)
-4. [Run the full pipeline](#run-the-full-pipeline)
-5. [Training in detail](#training-in-detail)
-6. [Training telemetry and visualisation](#training-telemetry-and-visualisation)
-7. [Evaluation](#evaluation)
-8. [Predict from the command line](#predict-from-the-command-line)
-9. [API (FastAPI, OpenAI-compatible)](#api-fastapi-openai-compatible)
-10. [Docker](#docker)
-11. [Project layout](#project-layout)
-12. [Configuration reference](#configuration-reference)
-13. [Testing](#testing)
-14. [Troubleshooting](#troubleshooting)
-15. [Pinned versions](#pinned-versions)
+2. [Training data](#training-data)
+3. [Requirements](#requirements)
+4. [Setup](#setup)
+5. [Run the full pipeline](#run-the-full-pipeline)
+6. [Training in detail](#training-in-detail)
+7. [Training telemetry and visualisation](#training-telemetry-and-visualisation)
+8. [Evaluation](#evaluation)
+9. [Predict from the command line](#predict-from-the-command-line)
+10. [API (FastAPI, OpenAI-compatible)](#api-fastapi-openai-compatible)
+11. [Docker](#docker)
+12. [Project layout](#project-layout)
+13. [Configuration reference](#configuration-reference)
+14. [Testing](#testing)
+15. [Troubleshooting](#troubleshooting)
+16. [Pinned versions](#pinned-versions)
+17. [License](#license)
+18. [Author](#author)
 
 ---
 
@@ -72,6 +75,39 @@ per-provision top-k [{name, confidence}]
 LEDGAR labels each provision with a single clause type. Multiple clause types per contract come from classifying each provision separately; multiple labels per provision come from the top-k list above the threshold.
 
 The full design rationale is in [plans/PLAN.md](plans/PLAN.md).
+
+---
+
+## Training data
+
+The model is trained on **LEDGAR** (Labeled EDGAR), as packaged in the [LexGLUE benchmark](https://huggingface.co/datasets/coastalcph/lex_glue) (`coastalcph/lex_glue`, config `ledgar`).
+
+| | |
+|---|---|
+| Source | Provisions (paragraphs) of commercial contracts filed with the US Securities and Exchange Commission and published on EDGAR, which is public information. Collected by Tuggener et al., [LREC 2020](https://aclanthology.org/2020.lrec-1.155). |
+| Size | 80,000 provisions from 12,000+ contracts: **60,000 train** (filed 2016 to 2017), **10,000 validation** (2018), **10,000 test** (2019). The chronological split means the test set is newer than the training set. |
+| Labels | **100 clause types**, one per provision, chosen by LexGLUE as the 100 most frequent of the original 12,000+ section headings. |
+| Text | English. Average provision is 114 words (median 86); with the Qwen3 tokenizer, mean 138 tokens and 1.9% longer than the 512-token limit. |
+| Format | Two columns, `text` and `label` (an integer id into the label list). Downloaded as three parquet files (28 MB). |
+| License | LexGLUE is published under **CC BY 4.0**; the underlying filings are public SEC records. See [License](#license). |
+
+The 100 clause types:
+
+> Adjustments, Agreements, Amendments, Anti-Corruption Laws, Applicable Laws, Approvals, Arbitration, Assignments, Assigns, Authority, Authorizations, Base Salary, Benefits, Binding Effects, Books, Brokers, Capitalization, Change In Control, Closings, Compliance With Laws, Confidentiality, Consent To Jurisdiction, Consents, Construction, Cooperation, Costs, Counterparts, Death, Defined Terms, Definitions, Disability, Disclosures, Duties, Effective Dates, Effectiveness, Employment, Enforceability, Enforcements, Entire Agreements, Erisa, Existence, Expenses, Fees, Financial Statements, Forfeitures, Further Assurances, General, Governing Laws, Headings, Indemnifications, Indemnity, Insurances, Integration, Intellectual Property, Interests, Interpretations, Jurisdictions, Liens, Litigations, Miscellaneous, Modifications, No Conflicts, No Defaults, No Waivers, Non-Disparagement, Notices, Organizations, Participations, Payments, Positions, Powers, Publicity, Qualifications, Records, Releases, Remedies, Representations, Sales, Sanctions, Severability, Solvency, Specific Performance, Submission To Jurisdiction, Subsidiaries, Successors, Survival, Tax Withholdings, Taxes, Terminations, Terms, Titles, Transactions With Affiliates, Use Of Proceeds, Vacations, Venues, Vesting, Waiver Of Jury Trials, Waivers, Warranties, Withholdings
+
+The classes are imbalanced. In the training split the most frequent types are Governing Laws (3,167), Notices (2,493), Counterparts (2,427), Entire Agreements (2,340) and Severability (1,808); the rarest are Books (23), Assigns (31), Qualifications (47), Anti-Corruption Laws (106) and Sanctions (118). Macro-F1 is therefore reported alongside accuracy, and `train.class_weighted_loss` can up-weight rare types.
+
+Example rows:
+
+| text | label |
+|---|---|
+| This Lease shall in all respects be governed by the laws of the State of New York. | Governing Laws |
+| The Committee may terminate the Plan at any time and grant no further Restricted Fund Shares. | Terminations |
+| Except as otherwise set forth in this Debenture, the Company ... expressly waives presentment, protest, demand, notice of dishonor ... | Waivers |
+
+Browse the data yourself with `make data` and then `GET /v1/dataset?split=train&offset=0&limit=10` on the API, or read `data/raw/ledgar/*.parquet` directly.
+
+**What the model does not learn from this data.** LEDGAR labels one clause type per provision and contains no annotation of risk, parties, dates or obligations. Multi-label output for a whole contract comes from splitting it into provisions. Provisions written in styles far from SEC-filed commercial contracts (consumer terms, non-English text) will be classified less reliably.
 
 ---
 
@@ -152,7 +188,7 @@ Each `make` target is a thin wrapper; the underlying commands are in the [Makefi
 make train                                   # default run name: ledgar-qwen3-0.6b-lora
 make train RUN=my-experiment                 # different run name
 make resume                                  # continue after Ctrl-C, a crash or a reboot
-make sanity                                  # 3-minute smoke test on 256 examples
+make sanity                                  # 5-minute smoke test on 256 examples
 ```
 
 Direct invocation with overrides (any config value can also be changed in the YAML):
@@ -242,6 +278,30 @@ uv run python scripts/04_predict.py --text "This Agreement shall be governed by 
 
 Inputs: `.txt`, `.md`, `.pdf` with a text layer, `.docx`. Scanned PDFs need OCR first.
 
+Sample output for the `--text` call:
+
+```json
+{
+  "document": [
+    {"name": "Governing Laws", "confidence": 0.8069}
+  ],
+  "clauses": [
+    {
+      "index": 0,
+      "text": "This Agreement shall be governed by the laws of New York.",
+      "predictions": [
+        {"name": "Governing Laws", "confidence": 0.8069}
+      ]
+    }
+  ],
+  "num_clauses": 1
+}
+```
+
+`document` lists every clause type found anywhere in the input with its best confidence, highest first. `clauses` gives the top-k predictions per provision (the top-1 is always kept, the rest only above the threshold). A provision the model is unsure about can therefore appear in `clauses` with a low-confidence top-1 while adding nothing to `document`.
+
+> All sample outputs in this README come from the 5-minute `make sanity` model, so the confidences are modest. A full `make train` run produces much sharper predictions.
+
 ---
 
 ## API (FastAPI, OpenAI-compatible)
@@ -259,17 +319,212 @@ make serve                       # http://localhost:8000, Swagger UI at /docs, s
 | GET | `/v1/dataset` | LEDGAR rows, 10 per page by default: `?split=train&offset=0&limit=10` (limit max 100) |
 | GET | `/v1/labels` | the 100 clause types |
 
-### curl
+### Endpoints with sample requests and responses
+
+#### `GET /health`
 
 ```bash
 curl -s localhost:8000/health
+```
 
-curl -s "localhost:8000/v1/dataset?split=train&offset=0&limit=10"
+`200` when the model is loaded:
 
+```json
+{
+  "status": "ok",
+  "model_loaded": true,
+  "model": "clause-classifier-qwen3-0.6b",
+  "model_dir": "artifacts/best",
+  "device": "mps",
+  "num_labels": 100,
+  "uptime_s": 3.304,
+  "version": "0.1.0",
+  "detail": null
+}
+```
+
+`503` while the model is missing or still loading (the dataset endpoints keep working):
+
+```json
+{
+  "status": "unavailable",
+  "model_loaded": false,
+  "model": "clause-classifier-qwen3-0.6b",
+  "model_dir": "artifacts/best",
+  "device": null,
+  "num_labels": null,
+  "uptime_s": 2.146,
+  "version": "0.1.0",
+  "detail": "No trained model at artifacts/best (run scripts/02_train.py first)"
+}
+```
+
+#### `GET /v1/models` and `GET /v1/models/{id}`
+
+```bash
+curl -s localhost:8000/v1/models
+curl -s localhost:8000/v1/models/clause-classifier-qwen3-0.6b
+```
+
+```json
+{
+  "object": "list",
+  "data": [
+    {"id": "clause-classifier-qwen3-0.6b", "object": "model", "created": 1791666222, "owned_by": "local"}
+  ]
+}
+```
+
+An unknown id returns `404` in the OpenAI error format:
+
+```json
+{
+  "error": {
+    "message": "The model 'gpt-4o' does not exist",
+    "type": "not_found_error",
+    "param": "model",
+    "code": "model_not_found"
+  }
+}
+```
+
+#### `POST /v1/chat/completions` (classify a clause or a whole contract)
+
+```bash
 curl -s localhost:8000/v1/chat/completions -H "Content-Type: application/json" -d '{
   "model": "clause-classifier-qwen3-0.6b",
   "messages": [{"role": "user", "content": "This Agreement shall be governed by the laws of New York."}]
 }'
+```
+
+A standard `chat.completion` object. The predictions are the JSON string in `choices[0].message.content`:
+
+```json
+{
+  "id": "chatcmpl-5f0b4683344349f48f47d5b4",
+  "object": "chat.completion",
+  "created": 1791666511,
+  "model": "clause-classifier-qwen3-0.6b",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"document\": [{\"name\": \"Governing Laws\", \"confidence\": 0.8069}], \"clauses\": [{\"index\": 0, \"text\": \"This Agreement shall be governed by the laws of New York.\", \"predictions\": [{\"name\": \"Governing Laws\", \"confidence\": 0.8069}]}], \"num_clauses\": 1}",
+        "refusal": null
+      },
+      "finish_reason": "stop",
+      "logprobs": null
+    }
+  ],
+  "usage": {"prompt_tokens": 12, "completion_tokens": 82, "total_tokens": 94},
+  "system_fingerprint": "fp_ledgar-qwen3-0.6b-lora"
+}
+```
+
+Send a whole contract the same way (here the 13-section `demo/sample_contract.txt`, with the optional `top_k` and `threshold` extras). The parsed `content` looks like this, abbreviated:
+
+```bash
+curl -s localhost:8000/v1/chat/completions -H "Content-Type: application/json" -d "$(python3 -c '
+import json; print(json.dumps({"model": "clause-classifier-qwen3-0.6b", "top_k": 2, "threshold": 0.2,
+  "messages": [{"role": "user", "content": open("demo/sample_contract.txt").read()}]}))')" \
+  | python3 -c "import sys, json; print(json.loads(sys.stdin.read())['choices'][0]['message']['content'])"
+```
+
+```json
+{
+  "document": [
+    {"name": "Governing Laws", "confidence": 0.5642},
+    {"name": "Counterparts", "confidence": 0.2466},
+    {"name": "Entire Agreements", "confidence": 0.1002}
+  ],
+  "clauses": [
+    {
+      "index": 0,
+      "text": "MASTER SERVICES AGREEMENT This Master Services Agreement (the \"Agreement\") is entered into as of March 1, 2025 ...",
+      "predictions": [{"name": "Survival", "confidence": 0.0358}]
+    },
+    {
+      "index": 1,
+      "text": "1. Definitions. Capitalized terms used but not defined elsewhere in this Agreement have the meanings set forth ...",
+      "predictions": [{"name": "Headings", "confidence": 0.0468}]
+    },
+    "... 11 more provisions ..."
+  ],
+  "num_clauses": 13
+}
+```
+
+Unsupported options return `400`:
+
+```json
+{
+  "error": {
+    "message": "stream=true is not supported by this classifier",
+    "type": "invalid_request_error",
+    "param": "stream",
+    "code": "unsupported_parameter"
+  }
+}
+```
+
+And without a loaded model the endpoint returns `503` with code `model_not_loaded`.
+
+#### `GET /v1/dataset` (browse the training data, 10 rows per page)
+
+```bash
+curl -s "localhost:8000/v1/dataset?split=train&offset=0&limit=2"
+```
+
+```json
+{
+  "split": "train",
+  "offset": 0,
+  "limit": 2,
+  "total": 60000,
+  "next_offset": 2,
+  "items": [
+    {
+      "id": "train-0",
+      "text": "Except as otherwise set forth in this Debenture, the Company, for itself and its legal representatives, successors and assigns, expressly waives presentment, protest, demand, notice of dishonor, notice of nonpayment, notice of maturity, notice of protest, presentment for the purpose of accelerating maturity, and diligence in collection.",
+      "label_id": 97,
+      "label": "Waivers"
+    },
+    {
+      "id": "train-1",
+      "text": "No ERISA Event has occurred or is reasonably expected to occur that, when taken together with all other such ERISA Events ... nor otherwise has any liability under Title IV of ERISA.",
+      "label_id": 39,
+      "label": "Erisa"
+    }
+  ]
+}
+```
+
+`split` is `train`, `validation` or `test`; `offset` defaults to 0 and `limit` to 10 (maximum 100). Page through with `next_offset` until it is `null`. A bad split returns `422`:
+
+```json
+{
+  "error": {
+    "message": "Input should be 'train', 'validation' or 'test'",
+    "type": "invalid_request_error",
+    "param": "split",
+    "code": "invalid_value"
+  }
+}
+```
+
+#### `GET /v1/labels`
+
+```bash
+curl -s localhost:8000/v1/labels
+```
+
+```json
+{
+  "object": "list",
+  "total": 100,
+  "data": ["Adjustments", "Agreements", "Amendments", "Anti-Corruption Laws", "Applicable Laws", "Approvals", "..."]
+}
 ```
 
 ### OpenAI Python SDK
@@ -285,7 +540,8 @@ resp = client.chat.completions.create(
     extra_body={"top_k": 3, "threshold": 0.3},       # optional, non-OpenAI knobs
 )
 result = json.loads(resp.choices[0].message.content)
-print(result["document"])        # [{"name": ..., "confidence": ...}, ...]
+print(resp.usage)                # CompletionUsage(prompt_tokens=658, completion_tokens=1011, total_tokens=1669)
+print(result["document"])        # [{"name": "Governing Laws", "confidence": 0.5642}, ...]
 ```
 
 Request details:
@@ -351,9 +607,10 @@ contract-clause-classifier/
 ├── docs/TELEMETRY.md           telemetry file schema
 ├── plans/PLAN.md               approved design plan
 ├── Dockerfile, docker-compose.yml, .env.example
-├── CLAUDE.md, AGENTS.md, .cursor/rules/   guidance for coding agents
+├── AGENTS.md, CLAUDE.md, .cursor/rules/, .codex/   guidance for coding agents (AGENTS.md is canonical)
 ├── MEMORY.md                   project decisions and gotchas (agent memory)
-├── CHANGELOG.md
+├── CHANGELOG.md, changelog.html   release notes (Markdown and a standalone HTML page)
+├── LICENSE                     Apache-2.0
 ├── data/                       (git-ignored) raw parquet + tokenised cache
 └── artifacts/                  (git-ignored) runs/, best -> runs/<run>/merged
 ```
@@ -425,6 +682,31 @@ Exact versions are pinned in `pyproject.toml` and locked in `uv.lock`; all are s
 | numpy | 2.5.3 | matplotlib | 3.11.2 |
 | pillow | 12.3.0 | Docker base | python:3.12.15-slim-bookworm |
 
-## License and data
+## License
 
-Code: your choice (none set yet). Qwen3-0.6B-Base is Apache-2.0. LexGLUE (which packages LEDGAR) is CC BY 4.0; LEDGAR itself is derived from public SEC EDGAR filings. Check the terms before commercial use.
+This project is released under the **Apache License 2.0**. See [LICENSE](LICENSE).
+
+Apache 2.0 was chosen because it is permissive (commercial use, modification and redistribution are allowed), it includes an explicit patent grant, and it matches the licenses of the main components this project builds on, so the whole stack is license-compatible:
+
+| Component | License |
+|---|---|
+| This code | [Apache-2.0](LICENSE) |
+| [Qwen/Qwen3-0.6B-Base](https://huggingface.co/Qwen/Qwen3-0.6B-Base) (base model) | Apache-2.0 |
+| PyTorch | BSD-3-Clause |
+| transformers, peft, accelerate, huggingface_hub | Apache-2.0 |
+| FastAPI, uvicorn, pydantic, rich, typer | MIT |
+| [LexGLUE / LEDGAR](https://huggingface.co/datasets/coastalcph/lex_glue) (training data) | CC BY 4.0 (attribution required); derived from public SEC EDGAR filings |
+
+A model you train with this code is a derivative of Qwen3-0.6B-Base (Apache-2.0) and of LEDGAR (CC BY 4.0). If you redistribute trained weights, keep the attribution to both. Cite the data as:
+
+> Tuggener, D., von Däniken, P., Peetz, T., and Cieliebak, M. (2020). LEDGAR: A Large-Scale Multi-label Corpus for Text Classification of Legal Provisions in Contracts. LREC 2020.
+> Chalkidis, I. et al. (2022). LexGLUE: A Benchmark Dataset for Legal Language Understanding in English. ACL 2022.
+
+## Author
+
+**Shoaib Rayeen**
+Email: [shoaibrayeen.me@gmail.com](mailto:shoaibrayeen.me@gmail.com)
+Portfolio: [https://shoaibrayeen.github.io/](https://shoaibrayeen.github.io/)
+Repository: [github.com/shoaibrayeen/contract-clause-classifier](https://github.com/shoaibrayeen/contract-clause-classifier)
+
+Questions, bug reports and pull requests are welcome through the repository's issues page.

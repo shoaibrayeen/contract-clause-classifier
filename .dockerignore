@@ -12,4 +12,5 @@ tests
 .cursor
 *.md
 !README.md
+*.html
 .env

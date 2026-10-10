@@ -26,7 +26,7 @@ train: ## Step 2: fine-tune with live console dashboard + full telemetry (keeps 
 resume: ## Continue an interrupted training run from its last checkpoint
 	$(CAFFEINATE) $(UV) run python scripts/02_train.py --config $(CONFIG) --run-name $(RUN) --resume
 
-sanity: ## 3-minute smoke run on 256 examples (proves the loop learns; run name "sanity")
+sanity: ## 5-minute smoke run on 256 examples (proves the loop learns; run name "sanity")
 	$(UV) run python scripts/02_train.py --config $(CONFIG) --run-name sanity --limit 256 --epochs 2 --eval-steps 32 --eval-limit 256 --grad-accum 1
 
 evaluate: ## Step 3: calibrate on validation + full test-set report for artifacts/best

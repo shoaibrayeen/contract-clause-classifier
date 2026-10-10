@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Changelog · Contract Clause Classifier</title>
+<meta name="description" content="Detailed release notes for the contract clause classifier: data, training, telemetry, API, Docker, docs, licensing.">
+<style>
+  :root {
+    --bg: #fcfcfb; --surface: #ffffff; --text: #0b0b0b; --muted: #52514e; --faint: #898781;
+    --border: rgba(11,11,11,0.12); --accent: #185fa5; --accent-bg: #e6f1fb;
+    --added: #27500a; --added-bg: #eaf3de; --changed: #633806; --changed-bg: #faeeda;
+    --fixed: #4a1b0c; --fixed-bg: #faece7; --pinned: #26215c; --pinned-bg: #eeedfe;
+    --radius: 8px; --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1a1a19; --surface: #232322; --text: #f0efec; --muted: #c3c2b7; --faint: #898781;
+      --border: rgba(255,255,255,0.12); --accent: #85b7eb; --accent-bg: #0c447c;
+      --added: #c0dd97; --added-bg: #27500a; --changed: #fac775; --changed-bg: #633806;
+      --fixed: #f5c4b3; --fixed-bg: #4a1b0c; --pinned: #cecbf6; --pinned-bg: #26215c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1a1a19; --surface: #232322; --text: #f0efec; --muted: #c3c2b7; --faint: #898781;
+    --border: rgba(255,255,255,0.12); --accent: #85b7eb; --accent-bg: #0c447c;
+    --added: #c0dd97; --added-bg: #27500a; --changed: #fac775; --changed-bg: #633806;
+    --fixed: #f5c4b3; --fixed-bg: #4a1b0c; --pinned: #cecbf6; --pinned-bg: #26215c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); line-height: 1.6; font-size: 16px; }
+  main { max-width: 900px; margin: 0 auto; padding: 32px 16px 64px; }
+  header { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 28px; }
+  h1 { font-size: 28px; font-weight: 600; margin: 0 0 6px; }
+  h2 { font-size: 22px; font-weight: 600; margin: 40px 0 8px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  h3 { font-size: 17px; font-weight: 600; margin: 24px 0 8px; }
+  h4 { font-size: 15px; font-weight: 600; margin: 18px 0 6px; color: var(--text); }
+  p { margin: 0 0 12px; }
+  .sub { color: var(--muted); margin: 0; }
+  .meta { color: var(--faint); font-size: 14px; }
+  .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; font-size: 14px; }
+  .nav a { color: var(--accent); text-decoration: none; border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 10px; }
+  .nav a:hover { background: var(--accent-bg); }
+  .tag { font-size: 12px; font-weight: 600; letter-spacing: .02em; padding: 2px 8px; border-radius: 999px; vertical-align: middle; }
+  .tag.added { color: var(--added); background: var(--added-bg); }
+  .tag.changed { color: var(--changed); background: var(--changed-bg); }
+  .tag.fixed { color: var(--fixed); background: var(--fixed-bg); }
+  .tag.pinned { color: var(--pinned); background: var(--pinned-bg); }
+  .tag.version { color: var(--accent); background: var(--accent-bg); font-family: var(--mono); font-weight: 500; }
+  section.release { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px 8px; margin-bottom: 24px; }
+  ul { margin: 0 0 12px; padding-left: 22px; }
+  li { margin: 4px 0; }
+  li ul { margin-top: 4px; }
+  code { font-family: var(--mono); font-size: 0.9em; background: var(--accent-bg); color: var(--text); padding: 1px 5px; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 16px; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  details { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 14px; margin: 10px 0; }
+  summary { cursor: pointer; font-weight: 600; }
+  footer { color: var(--faint); font-size: 14px; margin-top: 40px; border-top: 1px solid var(--border); padding-top: 16px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Changelog</h1>
+  <p class="sub">Contract Clause Classifier: Qwen3-0.6B fine-tuned on LEDGAR, served through an OpenAI-compatible FastAPI.</p>
+  <p class="meta">Follows <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a> and <a href="https://semver.org/">Semantic Versioning</a>. Markdown source: <code>CHANGELOG.md</code>.</p>
+  <nav class="nav">
+    <a href="#unreleased">Unreleased</a>
+    <a href="#v0-1-0">0.1.0</a>
+    <a href="README.md">README</a>
+    <a href="LICENSE">License</a>
+    <a href="https://github.com/shoaibrayeen/contract-clause-classifier">Repository</a>
+  </nav>
+</header>
+
+<section class="release" id="unreleased">
+  <h2><span class="tag version">Unreleased</span></h2>
+  <p class="sub">Nothing yet.</p>
+</section>
+
+<section class="release" id="v0-1-0">
+  <h2><span class="tag version">0.1.0</span> <span class="meta">2026-10-11</span></h2>
+  <p>First complete version: data, training with telemetry, evaluation, inference, OpenAI-compatible API, Docker, documentation, licensing and agent guidance. Built and verified on an Apple M4 Pro with 48&nbsp;GB. Every step was verified end to end except the multi-hour full training run, which is left to the owner (<code>make all</code>).</p>
+
+  <h3><span class="tag added">Added</span></h3>
+
+  <h4>Data</h4>
+  <ul>
+    <li>Download of the LEDGAR split of LexGLUE from the Hugging Face parquet export (<code>coastalcph/lex_glue</code>, config <code>ledgar</code>), with an automatic fallback to the <code>lighteval/lexglue</code> mirror.</li>
+    <li>The 100 clause-type names are extracted from the parquet schema into <code>data/raw/ledgar/labels.json</code>.</li>
+    <li>Tokenisation cache per tokenizer and maximum length, so repeated runs skip tokenisation.</li>
+    <li>Length-grouped batch sampler that cuts padding to about 2%, deterministic per seed and epoch so resumed runs see the same order.</li>
+    <li>Every batch carries the source row id of each example, so training can be traced back to the dataset.</li>
+    <li>Lazy memory-mapped <code>DatasetStore</code> behind the paginated dataset endpoint.</li>
+    <li>Token-length statistics after preparation: mean 138, median 105, p90 292, 1.9% truncated at 512.</li>
+  </ul>
+
+  <h4>Model</h4>
+  <ul>
+    <li>Qwen3-0.6B-Base loaded as a sequence classifier with a 100-way head.</li>
+    <li>LoRA via PEFT on all attention and MLP projections (r=16, alpha=32, dropout 0.05); the head trains fully. 10.2M of 606M parameters train. Full fine-tuning is one flag.</li>
+    <li>Checkpoint save and load for adapter and full-weight checkpoints; adapter loading rebuilds the base with the right label count first.</li>
+    <li>Merge-and-export to a standalone bf16 safetensors model with labels and calibration, plus a permissions fix so Docker's non-root user can read it.</li>
+  </ul>
+
+  <h4>Training</h4>
+  <ul>
+    <li>Plain PyTorch loop: AdamW with weight-decay groups, 3% warm-up then cosine decay, gradient accumulation, gradient clipping, autocast mixed precision.</li>
+    <li>Device auto-detection (CUDA, then Apple MPS, then CPU). Precision <code>auto</code> is bf16 on CUDA and fp32 on MPS and CPU.</li>
+    <li>Evaluation every 500 steps on a fixed 3,000-example validation subset; best checkpoint by macro-F1; last checkpoint with optimizer state; early stopping after 4 evaluations without improvement.</li>
+    <li><code>--resume</code> continues from the last checkpoint and skips consumed micro-batches.</li>
+    <li>Periodic accelerator cache release every 25 steps.</li>
+    <li>At the end the best checkpoint is merged to <code>merged/</code> and <code>artifacts/best</code> is updated.</li>
+    <li>Command-line overrides for run name, epochs, limit, evaluation cadence, batch size, accumulation, learning rate, device, precision and backbone.</li>
+  </ul>
+
+  <h4>Live dashboard</h4>
+  <ul>
+    <li>Terminal panel refreshed twice a second: progress with ETA, loss and smoothed loss with a sparkline, learning rate, gradient norm and clipping, batch accuracy, tokens per second, step time, padding ratio, accelerator memory, CPU and RAM, clause types in the current batch, last five validation results.</li>
+    <li>Plain one-line log every 10 steps when output is redirected.</li>
+  </ul>
+
+  <h4>Telemetry</h4>
+  <p class="sub">Everything needed to replay a run later as charts, a GIF or a video, under <code>artifacts/runs/&lt;run&gt;/telemetry/</code>. Append-only, line-buffered, safe across crashes and resumes. Schema in <code>docs/TELEMETRY.md</code>.</p>
+  <table>
+    <tr><th>File</th><th>Captures</th></tr>
+    <tr><td><code>meta.json</code></td><td>config, environment, model shape, dataset statistics, probe-set ids, sessions, final summary</td></tr>
+    <tr><td><code>steps.jsonl</code></td><td>per optimizer step: loss, learning rate, gradient norm, clipping, step time, tokens, padding, throughput, memory, and the batch's example ids, labels, lengths, per-example losses and correctness</td></tr>
+    <tr><td><code>layers.jsonl</code></td><td>gradient norm per transformer layer and head every 10 steps</td></tr>
+    <tr><td><code>evals.jsonl</code></td><td>per evaluation: accuracy, micro and macro-F1, loss, per-class F1 for all 100 types, trainable weight norm per layer</td></tr>
+    <tr><td><code>evals/step_*.npz</code></td><td>confusion matrix and calibration bins</td></tr>
+    <tr><td><code>snapshots/step_*.npz</code></td><td>for a fixed probe set (about 500 validation examples): probabilities, final-layer embeddings, activation norms at all 29 layers, full per-layer vectors for a 1-per-class subset</td></tr>
+    <tr><td><code>events.jsonl</code></td><td>start, snapshot, eval, checkpoint, early stop, done</td></tr>
+    <tr><td><code>system.jsonl</code></td><td>CPU, RAM, process memory, accelerator memory, phase, every 5 seconds</td></tr>
+  </table>
+  <ul>
+    <li>Probe forward pass uses length-sorted batches: 24 seconds instead of 120 for the probe set.</li>
+  </ul>
+
+  <h4>Evaluation</h4>
+  <ul>
+    <li>Full test report: accuracy, micro, macro and weighted F1, log loss, calibration error before and after scaling, per-class precision and recall, top confusions.</li>
+    <li>Temperature scaling fitted on validation and saved next to the model; the API applies it automatically.</li>
+  </ul>
+
+  <h4>Inference</h4>
+  <ul>
+    <li>Contract segmentation into provisions: paragraphs, heading gluing, numbered sections, sub-item grouping, long-chunk splitting, merging of tiny unnumbered fragments.</li>
+    <li>Readers for text, Markdown, PDF with a text layer, and DOCX including tables.</li>
+    <li>Predictor with a pluggable backend: per-provision top-k with threshold (top-1 always kept) and document-level aggregation by maximum confidence.</li>
+    <li>Command-line tool for files or <code>--text</code>.</li>
+  </ul>
+
+  <h4>API (FastAPI, OpenAI-compatible)</h4>
+  <ul>
+    <li><code>GET /health</code> (200, or 503 with a reason), <code>GET /v1/models</code>, <code>GET /v1/models/{id}</code>, <code>POST /v1/chat/completions</code>, <code>GET /v1/dataset</code> (10 rows per page by default, up to 100), <code>GET /v1/labels</code>.</li>
+    <li>Chat completions accept the OpenAI request body, return a standard completion object with real token usage, and reject streaming and <code>n&gt;1</code>. Extra knobs <code>top_k</code>, <code>threshold</code>, <code>segment</code>.</li>
+    <li>OpenAI-style error envelope for every error, including validation errors.</li>
+    <li>Optional bearer-token authentication, CORS, input size limit, environment-variable settings.</li>
+    <li>Verified with the official OpenAI Python SDK.</li>
+  </ul>
+
+  <h4>Docker</h4>
+  <ul>
+    <li>Image on <code>python:3.12.15-slim-bookworm</code> with the CPU-only torch wheel, runtime dependencies only, non-root user, health check. About 1.9&nbsp;GB.</li>
+    <li>Compose file mounting <code>./artifacts</code> and <code>./data</code>; <code>.dockerignore</code>.</li>
+  </ul>
+
+  <h4>Visualisation</h4>
+  <ul>
+    <li>GIF renderer with four animated panels: training loss, validation accuracy and macro-F1, per-layer gradient heatmap, PCA of probe embeddings moving between snapshots. Works mid-training.</li>
+    <li>Demo GIF and final frame from the sanity run, and a 12-section sample contract, under <code>demo/</code>.</li>
+  </ul>
+
+  <h4>Tooling</h4>
+  <ul>
+    <li>Makefile targets: setup, data, train, resume, sanity, evaluate, gif, predict, serve, test, docker-build, docker-up, docker-down, all, clean-runs, help.</li>
+    <li>Exact dependency pins with groups <code>train</code>, <code>viz</code>, <code>dev</code>; lock file; Python 3.12.</li>
+    <li>Git ignore rules for data, artifacts, model files, environments and editor state.</li>
+  </ul>
+
+  <h4>Tests</h4>
+  <ul>
+    <li>28 pytest tests with a keyword stub model: segmentation, data paging and batching, telemetry sessions, prediction format, API routes, errors, auth, OpenAPI schema, OpenAI SDK compatibility. No downloads or GPU; about 3 seconds.</li>
+  </ul>
+
+  <h4>Documentation</h4>
+  <ul>
+    <li>README covering how it works, training data, requirements, setup, pipeline, training, telemetry, evaluation, CLI, API with sample requests and responses for every endpoint, Docker, layout, configuration, testing, troubleshooting, pinned versions, license and author.</li>
+    <li><code>docs/TELEMETRY.md</code> with the schema of every telemetry file; <code>plans/PLAN.md</code> with the approved plan and an implementation-status table; this changelog in Markdown and HTML.</li>
+  </ul>
+
+  <h4>Agent guidance</h4>
+  <ul>
+    <li><code>AGENTS.md</code> as the single source of truth (commands, layout, 12 rules, style, gotchas) with a map of how Codex, Claude Code and Cursor read it.</li>
+    <li><code>CLAUDE.md</code> importing it; Cursor rules (always-on project rule and a Python style rule); <code>.codex/README.md</code>.</li>
+    <li>Rule 11: always update <code>MEMORY.md</code> after completing a task. Rule 12: a task is complete only when tests pass and docs, changelog and memory are updated.</li>
+    <li><code>MEMORY.md</code> with owner preferences, design decisions, measurements and gotchas, all dated.</li>
+  </ul>
+
+  <h4>Licensing</h4>
+  <ul>
+    <li>Apache License 2.0 (copyright 2026 Shoaib Rayeen), chosen to match Qwen3-0.6B-Base and the Hugging Face stack and to include a patent grant. License, author, keywords and URLs added to <code>pyproject.toml</code>.</li>
+  </ul>
+
+  <h3><span class="tag changed">Changed during the build</span></h3>
+  <ul>
+    <li>Package renamed from <code>clauseclf</code> to <code>classification</code>; project folder renamed from <code>domain_models</code> to <code>contract-clause-classifier</code>.</li>
+    <li>Framework switched from MLX to PyTorch so training is machine-independent.</li>
+    <li>Micro-batch reduced from 8 to 4 with accumulation raised from 4 to 8 (effective batch 32 unchanged) after batch 8 drove Apple MPS memory to about 35&nbsp;GB and swapping.</li>
+    <li>Epochs reduced from 3 to 2 (about 2.3 hours per epoch on the M4 Pro).</li>
+    <li>In-training evaluation limited to a fixed 3,000-example validation subset.</li>
+    <li><code>precision: auto</code> uses fp32 on MPS after bf16 autocast measured no faster.</li>
+  </ul>
+
+  <h3><span class="tag fixed">Fixed during the build</span></h3>
+  <ul>
+    <li>Progress bar crashed on evaluation (<code>KeyError: 'status'</code>).</li>
+    <li>Adapter checkpoints failed to load with a 2-label head; fixed by rebuilding the base with the right label count.</li>
+    <li>Short numbered sections were merged into neighbouring provisions by the segmenter.</li>
+    <li>Exported safetensors were unreadable by Docker's non-root user.</li>
+    <li>Model fingerprint showed the folder name instead of the run name.</li>
+    <li>Duplicate session entries in telemetry metadata.</li>
+  </ul>
+
+  <h3><span class="tag pinned">Pinned</span></h3>
+  <details open>
+    <summary>Exact versions (stable releases, tested together)</summary>
+    <table>
+      <tr><th>Package</th><th>Version</th><th>Package</th><th>Version</th></tr>
+      <tr><td>Python</td><td>3.12</td><td>fastapi</td><td>0.143.0</td></tr>
+      <tr><td>torch</td><td>2.14.1</td><td>uvicorn</td><td>0.54.0</td></tr>
+      <tr><td>transformers</td><td>5.19.0</td><td>pydantic</td><td>2.14.0</td></tr>
+      <tr><td>peft</td><td>0.21.2</td><td>pyarrow</td><td>26.0.0</td></tr>
+      <tr><td>accelerate</td><td>1.15.0</td><td>pymupdf</td><td>1.28.2</td></tr>
+      <tr><td>scikit-learn</td><td>1.9.1</td><td>python-docx</td><td>1.2.0</td></tr>
+      <tr><td>huggingface_hub</td><td>2.2.0</td><td>rich</td><td>15.0.0</td></tr>
+      <tr><td>safetensors</td><td>0.8.0</td><td>typer</td><td>0.27.3</td></tr>
+      <tr><td>numpy</td><td>2.5.3</td><td>psutil</td><td>7.2.2</td></tr>
+      <tr><td>matplotlib</td><td>3.11.2</td><td>pillow</td><td>12.3.0</td></tr>
+      <tr><td>pytest</td><td>9.1.1</td><td>httpx</td><td>0.28.1</td></tr>
+      <tr><td>openai</td><td>3.28.0</td><td>Docker base</td><td>python:3.12.15-slim-bookworm</td></tr>
+    </table>
+  </details>
+
+  <h3>Measured (Apple M4 Pro, 48 GB, MPS)</h3>
+  <ul>
+    <li>About 990 tokens per second, about 4.4 seconds per optimizer step of 32 examples; 2 epochs about 5 hours.</li>
+    <li>Micro-batch 4: about 19.5&nbsp;GB accelerator memory. Micro-batch 8: about 35&nbsp;GB and swap exhaustion.</li>
+    <li>Sanity run (256 examples, 128 steps): validation accuracy 0.8% to 20%, proving the loop learns.</li>
+  </ul>
+</section>
+
+<footer>
+  Shoaib Rayeen · <a href="mailto:shoaibrayeen.me@gmail.com">shoaibrayeen.me@gmail.com</a> · <a href="https://shoaibrayeen.github.io/">shoaibrayeen.github.io</a> · Apache-2.0
+</footer>
+</main>
+</body>
+</html>

@@ -23,7 +23,7 @@ WORKDIR /app
 RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
 
 # Runtime deps only (training extras peft/accelerate/scikit-learn are not needed to serve a merged model).
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 RUN pip install . && \
     useradd --create-home --uid 1000 app && \
