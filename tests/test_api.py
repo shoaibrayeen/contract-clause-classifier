@@ -1,4 +1,5 @@
 import json
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -24,7 +25,7 @@ def test_health_ok(client):
 
 
 def test_health_unavailable_without_model(tiny_data, tmp_path):
-    app = create_app(Settings(model_dir=str(tmp_path / "missing")), dataset_store=DatasetStore(tiny_data))
+    app = create_app(Settings(runs_dir=str(tmp_path / "runs")), dataset_store=DatasetStore(tiny_data))
     with TestClient(app) as c:
         r = c.get("/health")
         assert r.status_code == 503 and r.json()["status"] == "unavailable"
@@ -119,3 +120,113 @@ def test_openai_sdk_compat(client):
     )
     result = json.loads(resp.choices[0].message.content)
     assert result["document"][0]["name"] == "Confidentiality"
+
+
+# --------------------------------------------------------------------------- multi-version serving
+
+class _Labelled:
+    """Stub backend that tags every prediction with its model id, to prove which version answered."""
+
+    def __init__(self, model_id):
+        from conftest import StubBackend
+
+        self.inner = StubBackend()
+        self.model_id = model_id
+        self.label_names = self.inner.label_names
+        self.device = "cpu"
+
+    def predict_proba(self, texts):
+        return self.inner.predict_proba(texts)
+
+    def count_tokens(self, text):
+        return self.inner.count_tokens(text)
+
+
+@pytest.fixture
+def versioned_client(tiny_data, tmp_path):
+    """Two versions on disk, loaded through the real ModelStore with a stub loader."""
+    from classification.api.models import ModelStore
+    from classification.predict import Predictor
+    from conftest import make_run
+
+    runs = tmp_path / "runs"
+    make_run(runs, "ledgar-qwen3-0.6b-lora-v1", 100)
+    make_run(runs, "ledgar-qwen3-0.6b-lora-v2", 200)
+    loads = []
+
+    def loader(path):
+        loads.append(path.parent.name)
+        return Predictor(_Labelled(path.parent.name))
+
+    settings = Settings(runs_dir=str(runs))
+    store = ModelStore(runs, loader, aliases=settings.aliases, max_loaded=1, rescan_s=0)
+    app = create_app(settings, model_store=store, dataset_store=DatasetStore(tiny_data))
+    with TestClient(app) as c:
+        c.loads, c.runs = loads, runs
+        yield c
+
+
+def _chat(client, **extra):
+    return client.post("/v1/chat/completions", json={
+        "messages": [{"role": "user", "content": "Governed by the laws of New York."}], **extra})
+
+
+def test_default_model_is_latest(versioned_client):
+    r = _chat(versioned_client)
+    assert r.status_code == 200 and r.json()["model"] == "ledgar-qwen3-0.6b-lora-v2"
+    assert r.json()["system_fingerprint"] == "fp_ledgar-qwen3-0.6b-lora-v2"
+
+
+@pytest.mark.parametrize("requested", ["latest", "clause-classifier-qwen3-0.6b", "ledgar-qwen3-0.6b-lora", ""])
+def test_aliases_and_base_name_resolve_to_latest(versioned_client, requested):
+    assert _chat(versioned_client, model=requested).json()["model"] == "ledgar-qwen3-0.6b-lora-v2"
+
+
+def test_explicit_version_is_used(versioned_client):
+    r = _chat(versioned_client, model="ledgar-qwen3-0.6b-lora-v1")
+    assert r.status_code == 200 and r.json()["model"] == "ledgar-qwen3-0.6b-lora-v1"
+
+
+def test_unknown_version_404_lists_available(versioned_client):
+    r = _chat(versioned_client, model="ledgar-qwen3-0.6b-lora-v9")
+    assert r.status_code == 404
+    err = r.json()["error"]
+    assert err["code"] == "model_not_found" and "ledgar-qwen3-0.6b-lora-v1" in err["message"]
+
+
+def test_models_endpoint_lists_all_versions(versioned_client):
+    data = versioned_client.get("/v1/models").json()["data"]
+    assert [m["id"] for m in data] == ["ledgar-qwen3-0.6b-lora-v2", "ledgar-qwen3-0.6b-lora-v1"]
+    assert [m["is_latest"] for m in data] == [True, False] and data[0]["version"] == 2
+    card = versioned_client.get("/v1/models/latest").json()
+    assert card["id"] == "ledgar-qwen3-0.6b-lora-v2"
+
+
+def test_health_reports_versions(versioned_client):
+    body = versioned_client.get("/health").json()
+    assert body["status"] == "ok" and body["latest_model"] == "ledgar-qwen3-0.6b-lora-v2"
+    assert body["latest_version"] == 2 and len(body["available_models"]) == 2
+    assert body["loaded_models"] == ["ledgar-qwen3-0.6b-lora-v2"]  # preloaded at startup
+
+
+def test_lru_and_lazy_loading(versioned_client):
+    _chat(versioned_client, model="ledgar-qwen3-0.6b-lora-v1")
+    _chat(versioned_client, model="ledgar-qwen3-0.6b-lora-v1")
+    assert versioned_client.loads == ["ledgar-qwen3-0.6b-lora-v2", "ledgar-qwen3-0.6b-lora-v1"]  # loaded once each
+    assert versioned_client.get("/health").json()["loaded_models"] == ["ledgar-qwen3-0.6b-lora-v1"]  # max_loaded=1
+
+
+def test_newly_trained_model_becomes_latest_without_restart(versioned_client):
+    from conftest import make_run
+
+    make_run(versioned_client.runs, "ledgar-qwen3-0.6b-lora-v3", time.time())
+    assert _chat(versioned_client).json()["model"] == "ledgar-qwen3-0.6b-lora-v3"
+
+
+def test_openai_sdk_selects_versions(versioned_client):
+    openai = pytest.importorskip("openai")
+    sdk = openai.OpenAI(base_url="http://testserver/v1", api_key="unused", http_client=versioned_client)
+    msgs = [{"role": "user", "content": "Each party shall keep information confidential."}]
+    assert sdk.chat.completions.create(model="latest", messages=msgs).model == "ledgar-qwen3-0.6b-lora-v2"
+    assert sdk.chat.completions.create(model="ledgar-qwen3-0.6b-lora-v1", messages=msgs).model == "ledgar-qwen3-0.6b-lora-v1"
+    assert [m.id for m in sdk.models.list().data][0] == "ledgar-qwen3-0.6b-lora-v2"

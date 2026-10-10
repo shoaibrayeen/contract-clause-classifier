@@ -12,8 +12,14 @@ def _env(name: str, default: str) -> str:
 
 @dataclass
 class Settings:
-    model_dir: str = field(default_factory=lambda: _env("MODEL_DIR", "artifacts/best"))
+    # Every completed run under RUNS_DIR is servable; requests pick one by id (default: latest).
+    runs_dir: str = field(default_factory=lambda: _env("RUNS_DIR", "artifacts/runs"))
+    # Optional extra model directory outside RUNS_DIR (e.g. a copied merged/ folder).
+    model_dir: str | None = field(default_factory=lambda: os.environ.get("MODEL_DIR") or None)
+    # Alias that always means "latest" (kept for clients written before versioning), besides "latest".
     model_id: str = field(default_factory=lambda: _env("MODEL_ID", "clause-classifier-qwen3-0.6b"))
+    max_loaded_models: int = field(default_factory=lambda: int(_env("MAX_LOADED_MODELS", "2")))
+    rescan_seconds: float = field(default_factory=lambda: float(_env("MODEL_RESCAN_SECONDS", "5")))
     data_dir: str = field(default_factory=lambda: _env("DATA_DIR", "data"))
     device: str = field(default_factory=lambda: _env("DEVICE", "auto"))
     top_k: int = field(default_factory=lambda: int(_env("TOP_K", "3")))
@@ -22,3 +28,7 @@ class Settings:
     api_key: str | None = field(default_factory=lambda: os.environ.get("API_KEY") or None)
     max_input_chars: int = field(default_factory=lambda: int(_env("MAX_INPUT_CHARS", "2000000")))
     cors_origins: list[str] = field(default_factory=lambda: [o for o in _env("CORS_ORIGINS", "*").split(",") if o])
+
+    @property
+    def aliases(self) -> tuple[str, ...]:
+        return tuple(dict.fromkeys(a for a in ("latest", self.model_id) if a))

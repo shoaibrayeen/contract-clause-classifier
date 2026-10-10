@@ -84,6 +84,7 @@ class TelemetryConfig:
 @dataclass
 class Config:
     model_name: str = "Qwen/Qwen3-0.6B-Base"
+    model_version: int = 1  # next version to train -> runs/<train.run_name>-v<N>; bumped after `make all`
     full_finetune: bool = False
     device: str = "auto"  # auto | cuda | mps | cpu
     precision: str = "auto"  # auto | bf16 | fp16 | fp32  (autocast dtype; weights stay fp32)

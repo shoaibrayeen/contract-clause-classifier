@@ -19,6 +19,7 @@ from ..config import DataConfig, resolve_path
 from ..data import DatasetStore
 from ..predict import Predictor, load_predictor
 from .errors import install_error_handlers
+from .models import ModelStore, StaticModelStore
 from .routes import dataset, health, openai
 from .settings import Settings
 
@@ -26,24 +27,25 @@ log = logging.getLogger("classification.api")
 
 
 def create_app(settings: Settings | None = None, predictor: Predictor | None = None,
-               dataset_store: DatasetStore | None = None) -> FastAPI:
-    """`predictor` / `dataset_store` can be injected (tests); otherwise loaded from settings."""
+               dataset_store: DatasetStore | None = None, model_store: ModelStore | None = None) -> FastAPI:
+    """Build the app. Inject `model_store` (or a single `predictor`) and `dataset_store` in tests;
+    otherwise every completed run under RUNS_DIR is served and the latest is preloaded."""
     settings = settings or Settings()
+    if model_store is None and predictor is not None:
+        model_store = StaticModelStore({settings.model_id: predictor}, aliases=settings.aliases)
+    if model_store is None:
+        model_store = ModelStore(
+            resolve_path(settings.runs_dir),
+            loader=lambda path: load_predictor(path, device=settings.device, top_k=settings.top_k,
+                                               threshold=settings.threshold, batch_size=settings.batch_size),
+            aliases=settings.aliases, max_loaded=settings.max_loaded_models, rescan_s=settings.rescan_seconds,
+            extra_dirs=[resolve_path(settings.model_dir)] if settings.model_dir else [],
+        )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.started_at = time.time()
-        if app.state.predictor is None:
-            model_dir = resolve_path(settings.model_dir)
-            try:
-                app.state.predictor = load_predictor(
-                    model_dir, device=settings.device, top_k=settings.top_k,
-                    threshold=settings.threshold, batch_size=settings.batch_size,
-                )
-                app.state.load_error = None
-            except Exception as exc:  # keep serving /health and /v1/dataset
-                log.error("Model failed to load from %s: %s", model_dir, exc)
-                app.state.load_error = str(exc)
+        app.state.models.preload_latest()
         yield
 
     app = FastAPI(
@@ -51,13 +53,13 @@ def create_app(settings: Settings | None = None, predictor: Predictor | None = N
         version=__version__,
         description=(
             "Classifies contract provisions into 100 LEDGAR clause types with calibrated confidences. "
-            "OpenAI-compatible: point any OpenAI SDK at `/v1` and call `chat.completions.create`."
+            "OpenAI-compatible: point any OpenAI SDK at `/v1` and call `chat.completions.create`. "
+            "Every trained version is served; omit `model` (or send `latest`) for the newest one."
         ),
         lifespan=lifespan,
     )
     app.state.settings = settings
-    app.state.predictor = predictor
-    app.state.load_error = None
+    app.state.models = model_store
     app.state.started_at = time.time()
     app.state.dataset = dataset_store or DatasetStore(DataConfig(data_dir=settings.data_dir))
 

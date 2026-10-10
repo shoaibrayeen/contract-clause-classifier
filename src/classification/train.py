@@ -5,7 +5,7 @@ Layout of a run directory (artifacts/runs/<run_name>/):
     metrics.jsonl        one JSON object per log / eval event
     checkpoint-best/     best adapter (or full weights) by validation macro-F1
     checkpoint-last/     latest state incl. optimizer/scheduler for --resume
-    merged/              merged, serving-ready model (written at the end)
+    merged/              merged, serving-ready model + model_info.json (written at the end)
     telemetry/           everything needed to visualise the run (see telemetry.py, scripts/06_visualize.py)
 """
 
@@ -37,6 +37,7 @@ from .data import (
     make_collate,
 )
 from .model import build_model, count_parameters, export_merged, load_tokenizer, save_checkpoint
+from .registry import refresh_best_link, split_name, write_model_info
 from .dashboard import TrainingDashboard
 from .telemetry import (
     RunRecorder,
@@ -134,9 +135,16 @@ def quick_metrics(logits: np.ndarray, labels: np.ndarray, num_labels: int) -> di
 
 
 class Trainer:
-    def __init__(self, cfg: Config, resume: bool = False):
+    """Trains one run into <output_dir>/<train.run_name>.
+
+    `version` is the model version this run produces (None for explicitly named, unversioned runs such
+    as `sanity`). scripts/02_train.py picks the run name and version via registry.plan_training_run.
+    """
+
+    def __init__(self, cfg: Config, resume: bool = False, version: int | None = None):
         self.cfg = cfg
         self.resume = resume
+        self.version = version
         self.device = resolve_device(cfg.device)
         self.amp_dtype = resolve_autocast_dtype(cfg.precision, self.device)
         self.run_dir = resolve_path(cfg.train.output_dir) / cfg.train.run_name
@@ -237,6 +245,8 @@ class Trainer:
         base_cfg = model.config
         rec.write_meta({
             "run_name": t.run_name,
+            "model_id": t.run_name,
+            "model_version": self.version,
             "config": cfg.to_dict(),
             "environment": environment_info(self.device),
             "label_names": label_names,
@@ -391,8 +401,17 @@ class Trainer:
 
         # Export the best checkpoint as a merged, serving-ready model.
         merged = export_merged(best_dir, self.run_dir / "merged")
-        update_best_link(merged)
-        summary = {"event": "done", "best_macro_f1": state["best_macro_f1"], "steps": global_step, "merged": str(merged)}
+        base, _ = split_name(t.run_name)
+        write_model_info(
+            merged, id=t.run_name, base_name=base if self.version is not None else t.run_name, version=self.version,
+            base_model=cfg.model_name, method="full" if cfg.full_finetune or not cfg.lora.enabled else "lora",
+            best_val_macro_f1=state["best_macro_f1"], steps=global_step, train_examples=len(train_loader.dataset),
+            run_dir=str(self.run_dir),
+        )
+        best_link = refresh_best_link(self.run_dir.parent)
+        summary = {"event": "done", "model_id": t.run_name, "model_version": self.version,
+                   "best_macro_f1": state["best_macro_f1"], "steps": global_step, "merged": str(merged),
+                   "best_link": str(best_link.readlink()) if best_link else None}
         self.log_event(**summary)
         rec.event("done", **summary)
         rec.write_meta({"summary": summary})
@@ -472,15 +491,7 @@ class Trainer:
             model.load_state_dict(src.state_dict())
 
 
-def update_best_link(target: Path) -> Path:
-    """Point artifacts/best -> the given model dir (relative symlink, works inside Docker mounts)."""
-    link = resolve_path("artifacts/best")
-    if link.is_symlink() or link.exists():
-        if link.is_symlink() or link.is_file():
-            link.unlink()
-        else:
-            import shutil
-
-            shutil.rmtree(link)
-    link.symlink_to(target.resolve().relative_to(link.parent.resolve()), target_is_directory=True)
-    return link
+def update_best_link(target: Path) -> Path | None:
+    """Deprecated: kept for compatibility. `artifacts/best` now always points at the latest model."""
+    runs_dir = Path(target).resolve().parent.parent
+    return refresh_best_link(runs_dir)

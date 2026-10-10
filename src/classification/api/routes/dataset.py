@@ -32,6 +32,8 @@ def get_dataset(
 @router.get("/labels", response_model=LabelList)
 def get_labels(request: Request) -> LabelList:
     """The 100 clause types the model can predict."""
-    predictor = request.app.state.predictor
+    store = request.app.state.models
+    latest = store.latest()
+    predictor = store.loaded().get(latest.id) if latest else None
     names = predictor.label_names if predictor else request.app.state.dataset.labels()
     return LabelList(total=len(names), data=names)

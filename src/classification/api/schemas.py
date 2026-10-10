@@ -31,6 +31,9 @@ class ChatMessage(BaseModel):
 class ChatCompletionRequest(BaseModel):
     """OpenAI `POST /v1/chat/completions` body. Unknown OpenAI params are accepted and ignored.
 
+    `model`: omit it (or send "latest" / the MODEL_ID alias) for the latest trained model, send a version id
+    such as "ledgar-qwen3-0.6b-lora-v1" for that version, or a base name for its latest version.
+
     Extra (non-OpenAI) knobs, passable via the SDK's `extra_body`:
         top_k, threshold, segment
     """
@@ -78,10 +81,18 @@ class ChatCompletionResponse(BaseModel):
 
 
 class ModelCard(BaseModel):
+    """OpenAI model object plus non-standard fields (clients ignore unknown fields)."""
+
     id: str
     object: Literal["model"] = "model"
     created: int
     owned_by: str = "local"
+    version: int | None = None
+    is_latest: bool = False
+    base_name: str | None = None
+    base_model: str | None = None
+    loaded: bool = False
+    metrics: dict[str, Any] | None = None
 
 
 class ModelList(BaseModel):
@@ -148,8 +159,12 @@ class LabelList(BaseModel):
 class Health(BaseModel):
     status: Literal["ok", "unavailable"]
     model_loaded: bool
-    model: str
-    model_dir: str
+    model: str | None
+    latest_model: str | None = None
+    latest_version: int | None = None
+    available_models: list[str] = []
+    loaded_models: list[str] = []
+    models_dir: str
     device: str | None = None
     num_labels: int | None = None
     uptime_s: float

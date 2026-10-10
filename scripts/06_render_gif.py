@@ -1,6 +1,7 @@
 """Render a run's telemetry into an animated GIF of the training process.
 
-    uv run python scripts/06_render_gif.py                                   # latest run
+    uv run python scripts/06_render_gif.py                                   # latest model's run
+    uv run python scripts/06_render_gif.py --run ledgar-qwen3-0.6b-lora-v2 --copy-to demo
     uv run python scripts/06_render_gif.py --run artifacts/runs/sanity --frames 80 --fps 10
 
 Panels (animated over optimizer steps):
@@ -53,6 +54,23 @@ def latest_run(root: Path) -> Path:
     if not runs:
         raise typer.BadParameter(f"No runs with telemetry under {root}")
     return max(runs, key=lambda p: p.stat().st_mtime).parents[1]
+
+
+def resolve_run(run: str, runs_root: Path) -> Path:
+    """A path, a model id / base name / 'latest' (via the registry), else the most recently updated run."""
+    if Path(run).exists():
+        return Path(run)
+    if (runs_root / run).exists():
+        return runs_root / run
+    from classification.registry import RegistryError, list_models, resolve_model
+
+    models = list_models(runs_root)
+    if run == "latest" and not models:
+        return latest_run(runs_root)  # nothing finished yet: render the run in progress
+    try:
+        return resolve_model(models, run).run_dir
+    except RegistryError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 def ema(values: list[float], alpha: float = 0.1) -> np.ndarray:
@@ -113,13 +131,15 @@ def style(ax, title: str) -> None:
 
 @app.command()
 def main(
-    run: Optional[Path] = typer.Option(None, help="Run dir (default: most recently updated under artifacts/runs)"),
+    run: str = typer.Option("latest", help="Run directory, model id (e.g. ledgar-qwen3-0.6b-lora-v2), or 'latest' "
+                            "(latest model; falls back to the most recently updated run, e.g. one still training)"),
     frames: int = typer.Option(72, help="Animation frames (plus a hold at the end)"),
     fps: int = typer.Option(8),
     out: Optional[Path] = typer.Option(None, help="Output GIF path (default <run>/visuals/training.gif)"),
     dpi: int = typer.Option(90),
+    copy_to: Optional[Path] = typer.Option(None, help="Also copy the GIF and PNG here as <run>_training.gif/.png"),
 ) -> None:
-    run = run or latest_run(Path("artifacts/runs"))
+    run = resolve_run(run, Path("artifacts/runs"))
     tel = run / "telemetry"
     meta = json.loads((tel / "meta.json").read_text())
     names = meta["label_names"]
@@ -232,6 +252,13 @@ def main(
     images[0].save(out, save_all=True, append_images=images[1:] + hold, duration=int(1000 / fps), loop=0,
                    optimize=True)
     print(f"Wrote {out} ({len(images)} frames, {out.stat().st_size / 1e6:.1f} MB) and {out.with_suffix('.png')}")
+    if copy_to:
+        import shutil
+
+        copy_to.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(out, copy_to / f"{run.name}_training.gif")
+        shutil.copyfile(out.with_suffix(".png"), copy_to / f"{run.name}_training_final_frame.png")
+        print(f"Copied to {copy_to / (run.name + '_training.gif')}")
 
 
 if __name__ == "__main__":

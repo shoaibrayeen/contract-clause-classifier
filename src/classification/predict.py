@@ -30,7 +30,7 @@ class Backend(Protocol):
 
 
 class HFBackend:
-    """Merged HF checkpoint (artifacts/best) on cuda / mps / cpu."""
+    """A merged HF model directory (artifacts/runs/<model>/merged) on cuda / mps / cpu."""
 
     def __init__(self, model_dir: str | Path, device: str = "auto", batch_size: int = 16, max_len: int = 512):
         import torch
@@ -52,13 +52,31 @@ class HFBackend:
         self.model.config.pad_token_id = self.tokenizer.pad_token_id
         cfg = self.model.config
         self.label_names = [cfg.id2label[i] for i in range(cfg.num_labels)]
-        self.temperature = load_temperature(model_dir)
+        self.model_dir = model_dir
+        self._load_temperature = load_temperature
+        self._calibration_mtime: float | None = None
+        self.temperature = 1.0
+        self._refresh_temperature()
         self.batch_size = batch_size
         self.max_len = max_len
         resolved = model_dir.resolve()
-        # artifacts/runs/<run>/merged -> use the run name as the model fingerprint
-        self.model_id = resolved.parent.name if resolved.name == "merged" else resolved.name
+        info_path = resolved / "model_info.json"
+        info_id = None
+        if info_path.exists():
+            import json
+
+            info_id = json.loads(info_path.read_text()).get("id")
+        # artifacts/runs/<run>/merged -> the run name (e.g. ledgar-qwen3-0.6b-lora-v2) identifies the model
+        self.model_id = info_id or (resolved.parent.name if resolved.name == "merged" else resolved.name)
         log.info("Loaded %s on %s (T=%.3f, %d labels)", model_dir, self.device, self.temperature, len(self.label_names))
+
+    def _refresh_temperature(self) -> None:
+        """Pick up calibration.json written by `make evaluate`, even while the API is running."""
+        path = Path(self.model_dir) / "calibration.json"
+        mtime = path.stat().st_mtime if path.exists() else None
+        if mtime != self._calibration_mtime:
+            self._calibration_mtime = mtime
+            self.temperature = self._load_temperature(self.model_dir)
 
     def count_tokens(self, text: str) -> int:
         return len(self.tokenizer(text, add_special_tokens=False)["input_ids"])
@@ -67,6 +85,7 @@ class HFBackend:
         torch = self.torch
         if not texts:
             return np.zeros((0, len(self.label_names)), dtype=np.float32)
+        self._refresh_temperature()
         order = sorted(range(len(texts)), key=lambda i: len(texts[i]))  # length-sort to reduce padding
         probs = np.zeros((len(texts), len(self.label_names)), dtype=np.float32)
         with torch.inference_mode():

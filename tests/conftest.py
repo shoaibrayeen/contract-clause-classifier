@@ -53,3 +53,20 @@ def tiny_data(tmp_path):
         )
     save_labels(LABELS, raw / "labels.json")
     return cfg
+
+
+def make_run(runs_dir, name, created, version="auto", complete=True, base=None):
+    """Create a fake run directory; complete runs get merged/config.json + model_info.json."""
+    import json
+
+    from classification.registry import split_name
+
+    run = runs_dir / name
+    (run / "checkpoint-last").mkdir(parents=True, exist_ok=True)
+    if complete:
+        (run / "merged").mkdir(parents=True, exist_ok=True)
+        (run / "merged" / "config.json").write_text("{}")
+        b, v = split_name(name)
+        info = {"id": name, "base_name": base or b, "version": v if version == "auto" else version, "created": created}
+        (run / "merged" / "model_info.json").write_text(json.dumps(info))
+    return run
