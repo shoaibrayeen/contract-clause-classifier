@@ -2,7 +2,7 @@
 
 Fine-tune a ~0.6B language model (Qwen3-0.6B) to recognise **clause types in contracts**, then serve it through an **OpenAI-compatible FastAPI**.
 
-Give it a contract (text, PDF or DOCX). It splits the contract into provisions, classifies each one into one of **72 clause types** (LEDGAR's 100 labels with synonyms merged), and returns calibrated confidences:
+Give it a contract (text, PDF or DOCX). It splits the contract into provisions, classifies each one into one of **78 clause types** (LEDGAR's 100 labels with legal synonyms merged), and returns calibrated confidences:
 
 ```json
 {
@@ -57,7 +57,7 @@ contract (.txt / .pdf / .docx, or the user message of a chat request)
    │  segment.py   split into provisions (numbered sections, headings, paragraphs)
    ▼
 [provision 1 … provision n]
-   │  Qwen3-0.6B-Base, fully fine-tuned, + 72-way classification head
+   │  Qwen3-0.6B-Base, fully fine-tuned, + 78-way classification head
    │  (last-token pooling, temperature-scaled softmax)
    ▼
 per-provision top-k [{name, confidence}]
@@ -69,7 +69,7 @@ per-provision top-k [{name, confidence}]
 | Choice | What | Why |
 |---|---|---|
 | Dataset | [LEDGAR](https://huggingface.co/datasets/coastalcph/lex_glue) (LexGLUE) | 80,000 real contract provisions from SEC filings, chronological train/validation/test split (60k / 10k / 10k). Not CUAD, by design. |
-| Labels | 100 LEDGAR labels merged into 72 clause types | 21 groups of synonyms ("Applicable Laws" = "Governing Laws", …) that no model can tell apart. See [Training data](#training-data). |
+| Labels | 100 LEDGAR labels merged into 78 clause types | 19 groups of legal synonyms ("Applicable Laws" = "Governing Laws", …), each verified on the rows like a contracts lawyer would and confirmed by confusion statistics. See [Training data](#training-data). |
 | Model | [Qwen/Qwen3-0.6B-Base](https://huggingface.co/Qwen/Qwen3-0.6B-Base) | 0.6B parameters, Apache-2.0, strong for its size. Swap to `Qwen/Qwen2.5-0.5B` or `HuggingFaceTB/SmolLM2-360M` with one config line. |
 | Method | Full fine-tuning (all 596M weights), label smoothing 0.1, 3 epochs, early stopping on accuracy | Measured only about 17% slower than LoRA on an M4 Pro and usually 1 to 2 points more accurate. LoRA (r=64) is one flag away. |
 | Framework | PyTorch + Hugging Face `transformers` + `peft` | Same code on MPS, CUDA and CPU. |
@@ -89,9 +89,9 @@ The model is trained on **LEDGAR** (Labeled EDGAR), as packaged in the [LexGLUE 
 |---|---|
 | Source | Provisions (paragraphs) of commercial contracts filed with the US Securities and Exchange Commission and published on EDGAR, which is public information. Collected by Tuggener et al., [LREC 2020](https://aclanthology.org/2020.lrec-1.155). |
 | Size | 80,000 provisions from 12,000+ contracts: **60,000 train** (filed 2016 to 2017), **10,000 validation** (2018), **10,000 test** (2019). The chronological split means the test set is newer than the training set. |
-| Labels | **100 labels**, one per provision, chosen by LexGLUE as the 100 most frequent of the original 12,000+ section headings. This project merges synonyms into **72 clause types** (below). |
+| Labels | **100 labels**, one per provision, chosen by LexGLUE as the 100 most frequent of the original 12,000+ section headings. This project merges legal synonyms into **78 clause types** (below). |
 | Text | English. Average provision is 114 words (median 86); with the Qwen3 tokenizer, mean 138 tokens and 1.9% longer than the 512-token limit. |
-| Format | Two columns, `text` and `label` (an integer id into the label list). Downloaded as three parquet files (28 MB). |
+| Format | Two columns, `text` and `label` (an integer id into the label list). Three parquet files (28 MB) **committed in `data/raw/ledgar/`**, so every clone trains and evaluates on identical rows; `make data` only tokenises them (delete them to re-download). [`data/raw/ledgar/README.md`](data/raw/ledgar/README.md) credits the sources with the exact download URL, date and checksum of every file. |
 | License | LexGLUE is published under **CC BY 4.0**; the underlying filings are public SEC records. See [License](#license). |
 
 The 100 original labels:
@@ -113,16 +113,21 @@ Browse the data yourself with `make data` and then `GET /v1/dataset?split=train&
 **What the model does not learn from this data.** LEDGAR labels one clause type per provision and contains no annotation of risk, parties, dates or obligations. Multi-label output for a whole contract comes from splitting it into provisions. Provisions written in styles far from SEC-filed commercial contracts (consumer terms, non-English text) will be classified less reliably.
 
 
-### Label grouping: 100 labels become 72 clause types
+### Label grouping: 100 labels become 78 clause types
 
 LEDGAR's label is the heading each drafter happened to choose, so one clause type often appears under several names. In the first training run (LoRA, raw labels, stopped at step 1,288), **38% of all validation errors were between such synonyms**: Applicable Laws vs Governing Laws (18 errors in 3,000), Tax Withholdings vs Withholdings (17), Representations vs Warranties (17), Definitions vs Defined Terms (16), Integration vs Entire Agreements (13), and so on. The text gives no way to tell them apart, so these are label noise, not model mistakes.
 
-[configs/ledgar_label_groups.yaml](configs/ledgar_label_groups.yaml) merges 49 such labels into 21 canonical clause types:
+Each merge in [configs/ledgar_label_groups.yaml](configs/ledgar_label_groups.yaml) had to pass two tests, documented in the file:
+
+1. **Legal test.** The headings denote the same legal concept, judged on the actual provisions the way a contracts lawyer would read them. For example, 75% of "Warranties" rows are "represents and warrants" sections (5% are product warranties), and 75% of "Authorizations" rows are the due-authorization representation (8% concern permits), so both merges hold. Headings that share words but carry different legal meaning stay separate: Term vs Termination, Fees vs Expenses, Taxes vs Withholdings, Venue vs Jurisdiction, Remedies vs Specific Performance, Assignment vs Successors and Assigns.
+2. **Statistical test.** An independent TF-IDF classifier on the full 10,000-row validation split confuses the members with each other (at least about 8% of their combined rows, or 40% of one member's errors).
+
+19 groups merge 41 labels:
 
 | Clause type | Original LEDGAR labels |
 |---|---|
 | Governing Laws | Governing Laws, Applicable Laws |
-| Taxes and Withholdings | Taxes, Withholdings, Tax Withholdings |
+| Withholdings | Withholdings, Tax Withholdings |
 | Representations and Warranties | Representations, Warranties |
 | Definitions | Definitions, Defined Terms |
 | Entire Agreements | Entire Agreements, Integration |
@@ -132,18 +137,16 @@ LEDGAR's label is the heading each drafter happened to choose, so one clause typ
 | Indemnifications | Indemnifications, Indemnity |
 | Organization and Existence | Organizations, Existence, Qualifications |
 | Amendments | Amendments, Modifications |
-| Fees and Expenses | Fees, Expenses, Costs |
-| Jurisdiction and Venue | Jurisdictions, Submission To Jurisdiction, Consent To Jurisdiction, Venues |
+| Expenses | Expenses, Costs |
+| Jurisdiction | Jurisdictions, Submission To Jurisdiction, Consent To Jurisdiction |
 | Waivers | Waivers, No Waivers |
 | Effectiveness | Effectiveness, Effective Dates |
 | Duties and Positions | Duties, Positions |
 | Books and Records | Books, Records |
 | Consents and Approvals | Consents, Approvals |
 | Sanctions and Anti-Corruption Laws | Sanctions, Anti-Corruption Laws |
-| Remedies | Remedies, Specific Performance, Enforcements |
-| Miscellaneous | Miscellaneous, General |
 
-The other 51 labels keep their names. Measured on the first run's validation confusion matrix at the same checkpoint, this alone moves accuracy from **83.0% to 90.0%** (40% fewer errors), and the rarest class grows from 23 to 125 training examples. Set `data.label_groups: null` in the config to train on the original 100 labels. `/v1/dataset` shows both the clause type (`label`) and the original heading (`original_label`) for every row.
+The other 59 labels keep their names. Measured on the first run's validation confusion matrix at the same checkpoint, this moves accuracy from **83.0% to 88.9%** (35% fewer errors); the TF-IDF baseline moves from 87.8% to 91.2% on the full validation split. The rarest class grows from 23 to 125 training examples. Set `data.label_groups: null` in the config to train on the original 100 labels. Every model saves the label space it was trained with (`label_space.json`), so older versions remain evaluable after the groups change. `/v1/dataset` shows both the clause type (`label`) and the original heading (`original_label`) for every row.
 
 ---
 
@@ -155,13 +158,14 @@ The target for this project is 96 to 99% accuracy. Here is what the evidence sup
 |---|---|---|
 | Published state of the art on LEDGAR, 100 labels (BERT, RoBERTa, DeBERTa-class models) | about 88% | [LexGLUE](https://arxiv.org/abs/2110.00976) |
 | First run here: LoRA r=16, 100 labels, half an epoch | 83.0% | measured |
-| Same checkpoint scored on the 72 merged clause types | 90.0% | measured |
-| Default config: 72 clause types, full fine-tune, 3 epochs | **expected about 94 to 96%** | estimate: merged-label gain on top of a fully trained model |
+| Same checkpoint scored on the 78 merged clause types | 88.9% | measured |
+| Independent TF-IDF baseline, full validation split: 100 labels / 78 clause types | 87.8% / 91.2% | measured |
+| Default config: 78 clause types, full fine-tune, 3 epochs | **expected about 92 to 95%** | estimate: a fully trained model on 100 labels reaches about 88%; the merge adds 3 to 6 points; full fine-tuning 1 to 2 |
 | Top-3 accuracy (right clause among the three suggestions) | expected 98% or more | reported by `make evaluate` |
 
-So 96% top-1 is at the edge of what this data allows, and 99% top-1 is not reachable on LEDGAR. The remaining errors are mostly genuinely overlapping clause types, such as Terms vs Terminations or Enforceability vs Successors and Assigns. The levers that would go further:
+So 96% top-1 is above what this data supports without further merging, and 99% top-1 is not reachable on LEDGAR. The remaining errors are mostly clause types that are legally distinct but written alike, such as Term vs Termination, Survival vs Warranties, or Enforceability vs Successors and Assigns. The levers that would go further:
 
-1. **Merge more clause types** that you consider the same for your use case (edit the groups file; no re-tokenising needed).
+1. **Merge more clause types** that you consider the same for your use case (edit the groups file; no re-tokenising needed). Groups rejected on legal grounds are listed in the file; merging them would add 2 to 3 points at the cost of legal precision.
 2. **Use the top-3 output**: the API already returns the top-k labels with calibrated confidences, and top-3 accuracy is expected at 98% or more.
 3. **Train on your own labelled contracts** with your own taxonomy. Consistent labels are the single biggest factor; a cleanly labelled in-house set routinely reaches 97 to 99% with this model size.
 4. **A larger backbone** (for example Qwen3-1.7B) typically adds 1 to 2 points at three times the training time.
@@ -173,8 +177,8 @@ So 96% top-1 is at the edge of what this data allows, and 99% top-1 is not reach
 | | Minimum | Tested |
 |---|---|---|
 | OS | macOS on Apple Silicon, or Linux | macOS 26 on Apple M4 Pro, 48 GB |
-| Memory | 32 GB unified memory / RAM for training (24 GB with `full_finetune: false`) | about 22.5 GB of accelerator memory with the default config |
-| Disk | 10 GB free | base model 1.2 GB, data 0.1 GB, each run about 2 GB |
+| Memory | 32 GB unified memory / RAM for training (24 GB with `full_finetune: false`) | about 25 GB of accelerator memory with the default config |
+| Disk | 15 GB free per model version | base model 1.2 GB, data 0.1 GB, each full-fine-tune version about 10 GB (2 GB with LoRA) |
 | Python | 3.12 (installed by uv automatically) | 3.12.13 |
 | Tools | [uv](https://docs.astral.sh/uv/), `make`; Docker optional | uv 0.11, Docker 29 |
 
@@ -182,7 +186,7 @@ Training time for the default config (full fine-tune, up to 3 epochs, 5,625 opti
 
 | Hardware | Time |
 |---|---|
-| Apple M4 Pro (MPS) | about 8 hours for 3 epochs (about 2.6 hours per epoch) |
+| Apple M4 Pro (MPS) | about 9 hours for 3 epochs (5.4 s per step, about 2.8 hours per epoch, plus 11 evaluations of 3 minutes) |
 | Modern NVIDIA GPU (CUDA, bf16) | about 1 to 1.5 hours |
 
 ---
@@ -225,7 +229,7 @@ make all
 `make all` trains the next model version (see [Model versions](#model-versions)), evaluates it, renders its GIF into `demo/`, raises `model_version` in the config, and lists all models. Or step by step:
 
 ```bash
-make data       # 1. download LEDGAR (28 MB) and tokenize all splits
+make data       # 1. tokenize the LEDGAR data shipped in data/raw/ledgar (downloads only if missing)
 make train      # 2. train the next version, e.g. ledgar-qwen3-0.6b-v1; live dashboard + telemetry
 make evaluate   # 3. calibrate confidences on validation, report test metrics (latest model)
 make gif        # 4. render the latest model's telemetry to a GIF (also copied to demo/)
@@ -306,7 +310,7 @@ A live panel refreshes twice a second: progress and ETA, loss and smoothed loss 
 
 ### What happens during a run
 
-1. The Qwen3 backbone is loaded with a fresh 72-way classification head (all weights train; LoRA adapters instead when `full_finetune: false`).
+1. The Qwen3 backbone is loaded with a fresh 78-way classification head (all weights train; LoRA adapters instead when `full_finetune: false`).
 2. Batches are grouped by length to cut padding (about 2% padding instead of about 50%).
 3. Every 500 optimizer steps it evaluates on a fixed 3,000-example validation subset, saves `checkpoint-last/` (with optimizer state for resume), and keeps `checkpoint-best/` by accuracy (`train.best_metric`). Training stops early after 4 evaluations without improvement.
 4. At the end, `checkpoint-best/` becomes the standalone model in `merged/` with a `model_info.json`, and `artifacts/best` is pointed at the latest version.
@@ -319,14 +323,14 @@ artifacts/runs/ledgar-qwen3-0.6b-v<N>/
 ├── metrics.jsonl        compact log (every 10 steps + each eval)
 ├── checkpoint-best/     best weights (or LoRA adapter) + tokenizer
 ├── checkpoint-last/     latest adapter + optimizer/scheduler state (for --resume)
-├── merged/              standalone serving model (bf16 safetensors, labels.json, model_info.json, calibration.json, eval.json)
+├── merged/              standalone serving model (bf16 safetensors, labels.json, label_space.json, model_info.json, calibration.json, eval.json)
 ├── telemetry/           everything needed to replay the run (next section)
 └── visuals/             training.gif / training.png (after `make gif`)
 ```
 
 ### Memory notes for Apple Silicon
 
-The default micro-batch is 4 with 8 accumulation steps (effective batch 32). Full fine-tuning then uses about 22.5 GB of accelerator memory; LoRA about 19 GB. A micro-batch of 8 pushes the MPS allocator past 35 GB and starts swapping on a 48 GB machine. The trainer also releases cached accelerator memory every 25 steps. Closing heavy apps (browsers, Docker VMs) during training helps.
+The default micro-batch is 4 with 8 accumulation steps (effective batch 32). Full fine-tuning then peaks at about 25 GB of accelerator memory; LoRA about 19 GB. A micro-batch of 8 pushes the MPS allocator past 35 GB and starts swapping on a 48 GB machine. The trainer also releases cached accelerator memory every 25 steps. Closing heavy apps (browsers, Docker VMs) during training helps.
 
 ---
 
@@ -437,7 +441,7 @@ make serve                       # http://localhost:8000; playground at /playgro
 | GET | `/v1/models/{id}` | one version (`latest` and base names resolve too) |
 | POST | `/v1/chat/completions` | classify the last user message with the latest model, or the one named in `model` |
 | GET | `/v1/dataset` | LEDGAR rows, 10 per page by default: `?split=train&offset=0&limit=10` (limit max 100) |
-| GET | `/v1/labels` | the 72 clause types |
+| GET | `/v1/labels` | the 78 clause types |
 | GET | `/playground` | browser playground (`/` redirects here) |
 
 ### Endpoints with sample requests and responses
@@ -461,7 +465,7 @@ curl -s localhost:8000/health
   "loaded_models": ["ledgar-qwen3-0.6b-v2"],
   "models_dir": "contract-clause-classifier/artifacts/runs",
   "device": "mps",
-  "num_labels": 72,
+  "num_labels": 78,
   "uptime_s": 2.253,
   "version": "0.1.0",
   "detail": null
@@ -645,14 +649,14 @@ curl -s "localhost:8000/v1/dataset?split=train&offset=0&limit=2"
     {
       "id": "train-0",
       "text": "Except as otherwise set forth in this Debenture, the Company, for itself and its legal representatives, successors and assigns, expressly waives presentment, protest, demand, notice of dishonor, notice of nonpayment, notice of maturity, notice of protest, presentment for the purpose of accelerating maturity, and diligence in collection.",
-      "label_id": 72,
+      "label_id": 51,
       "label": "Waivers",
       "original_label": "Waivers"
     },
     {
       "id": "train-1",
       "text": "No ERISA Event has occurred or is reasonably expected to occur that, when taken together with all other such ERISA Events ... nor otherwise has any liability under Title IV of ERISA.",
-      "label_id": 38,
+      "label_id": 34,
       "label": "Erisa",
       "original_label": "Erisa"
     }
@@ -682,7 +686,7 @@ curl -s localhost:8000/v1/labels
 ```json
 {
   "object": "list",
-  "total": 72,
+  "total": 78,
   "data": ["Adjustments", "Agreements", "Amendments", "Sanctions and Anti-Corruption Laws", "Governing Laws", "Consents and Approvals", "..."]
 }
 ```
@@ -752,7 +756,7 @@ contract-clause-classifier/
 ├── pyproject.toml / uv.lock    pinned dependencies (Python 3.12)
 ├── configs/
 │   ├── ledgar_qwen3_0.6b.yaml  all training settings, incl. model_version
-│   └── ledgar_label_groups.yaml  synonym labels merged into 72 clause types
+│   └── ledgar_label_groups.yaml  legal-synonym labels merged into 78 clause types, with the reasoning
 ├── src/classification/
 │   ├── config.py               config dataclasses, device + precision resolution
 │   ├── data.py                 LEDGAR download, tokenisation cache, length-grouped batching, dataset API store
@@ -780,7 +784,8 @@ contract-clause-classifier/
 ├── MEMORY.md                   project decisions and gotchas (agent memory)
 ├── CHANGELOG.md, changelog.html   release notes (Markdown and a standalone HTML page)
 ├── LICENSE                     Apache-2.0
-├── data/                       (git-ignored) raw parquet + tokenised cache
+├── data/raw/ledgar/            LEDGAR parquet files + attribution README (committed, 28 MB)
+├── data/cache/                 (git-ignored) tokenised cache
 └── artifacts/                  (git-ignored) runs/<run>-v<N>/ per version, best -> latest version
 ```
 
@@ -798,7 +803,7 @@ Everything lives in [configs/ledgar_qwen3_0.6b.yaml](configs/ledgar_qwen3_0.6b.y
 | `device` | `auto` | `auto` picks cuda, then mps, then cpu |
 | `precision` | `auto` | bf16 autocast on CUDA, fp32 on MPS and CPU |
 | `data.max_len` | `512` | tokens per provision (about 2% of LEDGAR is longer) |
-| `data.label_groups` | `configs/ledgar_label_groups.yaml` | merge synonym labels (100 to 72); `null` = original labels |
+| `data.label_groups` | `configs/ledgar_label_groups.yaml` | merge legal-synonym labels (100 to 78); `null` = original labels |
 | `lora.r` / `lora.alpha` | `64` / `128` | LoRA rank and scale (only when `full_finetune: false`) |
 | `train.run_name` | `ledgar-qwen3-0.6b` | base name; runs are saved as `<run_name>-v<model_version>` |
 | `train.epochs` | `3` | passes over the 60k training provisions (early stopping may end sooner) |
@@ -821,7 +826,7 @@ Everything lives in [configs/ledgar_qwen3_0.6b.yaml](configs/ledgar_qwen3_0.6b.y
 make test
 ```
 
-71 tests cover segmentation, label grouping, data paging and batching, model versioning (naming, never-overwrite, resume and restart, bumping, latest selection), multi-version serving and model selection, the dashboard fitting the terminal, the prediction output format, every API route and error case, the playground, API-key auth, the OpenAPI schema, compatibility with the official OpenAI Python SDK, and that every AI assistant's rules file matches `AGENTS.md`. They use a keyword-based stub model, so they run in seconds with no download or GPU.
+72 tests cover segmentation, label grouping, data paging and batching, model versioning (naming, never-overwrite, resume and restart, bumping, latest selection), multi-version serving and model selection, the dashboard fitting the terminal, the prediction output format, every API route and error case, the playground, API-key auth, the OpenAPI schema, compatibility with the official OpenAI Python SDK, and that every AI assistant's rules file matches `AGENTS.md`. They use a keyword-based stub model, so they run in seconds with no download or GPU.
 
 ---
 

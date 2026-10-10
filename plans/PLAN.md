@@ -197,3 +197,10 @@ Requested by the owner after the first full run (LoRA, 100 labels) plateaued aro
 | Agent rules | Core rules + model, changelog, security, git, data, docs rules; generated files for 10 more assistants | owner request |
 
 Verified without touching the owner's run: 71 tests; versioned training v1 -> v2 -> guarded v3 -> restart on a tiny CPU model; evaluate, predict, GIF, model list; API and playground in the browser; Docker serving two versions with auto-discovery.
+
+## Validation pass (2026-10-11, later still)
+
+- Label grouping redone as a legal analyst would: 19 groups / 41 labels / 78 clause types, each merge justified on the rows and by an independent TF-IDF baseline; five candidate merges rejected. Same stopped checkpoint: 83.0% -> 88.9%. Expected final: about 92-95% top-1, 98%+ top-3.
+- Config re-validated against the stopped run's telemetry (loss still falling, clipping, length of hard examples, eval time) and the full fine-tune path run end to end on the real model (25 GB peak, 5.4 s/step, ~10 GB disk per version).
+- Bug found and fixed: evaluation now uses the label space saved with each model (`label_space.json`).
+- Dataset committed with per-file provenance (URL, date, SHA-256, license, citations); baked into the Docker image.

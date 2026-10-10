@@ -21,7 +21,7 @@ These are the rules every AI assistant must follow in this repository. The full 
 6. **Keep training device-agnostic** (CUDA, Apple MPS, CPU via `config.resolve_device`).
 7. **Tests must pass** (`make test`) and must not download models or need a GPU; add tests for every behaviour change.
 8. **Accuracy claims need evidence** from `make evaluate` or telemetry, naming the split, the label set (72 merged or 100 original) and top-1 vs top-3.
-9. **Security and privacy:** never commit secrets or `.env`; never log or persist contract text; keep `/v1/*` behind `API_KEY` when set; never commit `artifacts/` or `data/`.
+9. **Security and privacy:** never commit secrets or `.env`; never log or persist contract text; keep `/v1/*` behind `API_KEY` when set; never commit `artifacts/` or `data/cache/` (the raw LEDGAR parquet in `data/raw/ledgar/` is committed on purpose).
 10. **Do not commit or push** unless the owner asks.
 11. **Docs move with code:** update README (with sample responses), `docs/`, and the agent files in the same change.
 12. **Finish properly:** update `CHANGELOG.md` and `changelog.html` (kept in sync) and append dated decisions, measurements and gotchas to `MEMORY.md` before reporting a task done.

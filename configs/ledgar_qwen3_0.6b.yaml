@@ -4,14 +4,20 @@
 # Why these settings (evidence from the first run, stopped at step 1,288; details in MEMORY.md):
 #   - LoRA r=16 on the raw 100 labels reached 83.0% val accuracy at half an epoch.
 #   - 38% of its errors were between synonym labels (Applicable Laws vs Governing Laws, ...).
-#     data.label_groups merges them into 72 clause types: same checkpoint -> ~90% accuracy.
-#   - Full fine-tuning measured only ~17% slower than LoRA on an M4 Pro (22.5 GB) and usually adds
-#     1-2 points on classification, so it is on by default.
-#   - 3 epochs with label smoothing and early stopping on accuracy.
+#     data.label_groups merges the ones a legal analyst would treat as the same clause type
+#     (100 -> 78): the same checkpoint scores 88.9% instead of 83.0%.
+#   - Full fine-tuning measured ~17% slower than LoRA on an M4 Pro (25 GB peak, 5.4 s per step of 32)
+#     and usually adds 1-2 points on classification, so it is on by default. Verified end to end.
+#   - Its loss was still falling at step 1,288 (0.61) with 83% batch accuracy, so 3 epochs are justified;
+#     early stopping on validation accuracy ends the run if it stops improving.
+#   - Gradients were clipped at every step (norms 5-20 vs max 1.0): standard, kept at 1.0.
+#   - Hard examples were not longer than average (2.6% vs 1.9% truncated), so max_len stays 512.
+#   - Each full-fine-tune version uses ~10 GB of disk (checkpoint-best 2.2 GB, checkpoint-last with
+#     optimizer state 6.7 GB, merged 1.1 GB).
 
 model_name: Qwen/Qwen3-0.6B-Base
 model_version: 1            # next model version to train -> artifacts/runs/<train.run_name>-v<N>; bumped automatically after `make all`
-full_finetune: true         # train all 596M weights (best accuracy); false = LoRA adapters only (faster, ~1-2 pts lower)
+full_finetune: true         # train all 596M weights (best accuracy, ~25 GB); false = LoRA adapters only (~19 GB, ~1-2 pts lower)
 device: auto
 precision: auto             # autocast dtype: auto (bf16 on cuda, fp32 on mps/cpu) | bf16 | fp16 | fp32
 
@@ -21,7 +27,7 @@ data:
   dataset_config: ledgar
   dataset_revision: refs/convert/parquet
   max_len: 512              # covers 98% of provisions in full
-  label_groups: configs/ledgar_label_groups.yaml   # merge synonym labels (100 -> 72); null = original 100 labels
+  label_groups: configs/ledgar_label_groups.yaml   # merge synonym labels (100 -> 78 clause types); null = original 100 labels
 
 lora:                       # used only when full_finetune: false
   enabled: true
@@ -33,8 +39,8 @@ lora:                       # used only when full_finetune: false
 train:
   run_name: ledgar-qwen3-0.6b   # base name; runs are saved as <run_name>-v<model_version>
   output_dir: artifacts/runs
-  epochs: 3                 # ~2.6 h/epoch full fine-tune on M4 Pro (MPS); early stopping usually ends sooner
-  batch_size: 4             # micro-batch; 4 keeps MPS memory ~22 GB (8 -> 35+ GB and swapping on 48 GB)
+  epochs: 3                 # ~2.8 h/epoch full fine-tune on M4 Pro (MPS, 5.4 s/step); early stopping may end sooner
+  batch_size: 4             # micro-batch; 4 keeps MPS memory ~25 GB for full fine-tuning (8 -> 35+ GB and swapping on 48 GB)
   grad_accum: 8             # effective batch 32
   lr: 2.0e-5                # full fine-tune rate; use ~2e-4 if full_finetune: false
   weight_decay: 0.01
@@ -43,7 +49,7 @@ train:
   label_smoothing: 0.1      # soft targets: helps with the remaining near-duplicate clause types
   best_metric: accuracy     # accuracy | macro_f1 - selects checkpoint-best and drives early stopping
   eval_steps: 500           # optimizer steps between validation runs
-  eval_limit: 3000          # fixed random subset of validation used for in-training evals (null = all 10k)
+  eval_limit: 3000          # fixed random validation subset for in-training evals (~3 min each on MPS; all 10k would add ~1.5 h; final eval uses all 10k)
   eval_batch_size: 32
   early_stopping_patience: 4
   log_steps: 10
@@ -58,8 +64,8 @@ telemetry:
   enabled: true
   record_batches: true      # example ids / labels / lengths / per-example loss for every step
   layer_stats_every: 10     # per-layer gradient norms every N steps
-  probe_per_label: 5        # fixed validation probe set (~360 examples) snapshotted at every eval
+  probe_per_label: 5        # fixed validation probe set (~390 examples) snapshotted at every eval
   embeddings: true          # pooled final-layer vectors of the probe set
-  layer_probe_per_label: 1  # probes with vectors at every layer ("node" data, ~72 examples)
+  layer_probe_per_label: 1  # probes with vectors at every layer ("node" data, ~78 examples)
   system_interval_s: 5      # CPU / RAM / accelerator memory sampling period
   live_dashboard: true      # rich live panel in the terminal

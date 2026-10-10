@@ -24,7 +24,7 @@ from rich.table import Table
 from classification.config import display_path, load_config, resolve_device, resolve_path
 from classification.evaluate import fit_temperature, full_report, softmax, expected_calibration_error, split_logits
 from classification.labels import load_labels
-from classification.model import LABELS_FILE, load_trained, save_calibration
+from classification.model import LABELS_FILE, label_space_for_model, load_trained, save_calibration
 from classification.registry import RegistryError, resolve_model_dir, update_model_info
 
 app = typer.Typer(add_completion=False)
@@ -60,10 +60,18 @@ def main(
     ]
     # Tokenisation cache is keyed by the base tokenizer name (same vocab as the fine-tuned model).
     tok_name = cfg.model_name
+    # Score against the label space this model was trained with (saved as label_space.json), so older
+    # versions stay evaluable after configs/ledgar_label_groups.yaml changes.
+    try:
+        space = label_space_for_model(model_dir, cfg.data, names)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=2)
+    console.print(f"Label space: {len(space.names)} clause types" + (f" ({space.source})" if space.source else ""))
 
     temperature = 1.0
     if calibrate:
-        v_logits, v_labels = split_logits(clf, tok, cfg.data, "validation", tok_name, dev, batch_size=batch_size, limit=limit)
+        v_logits, v_labels = split_logits(clf, tok, cfg.data, "validation", tok_name, dev, batch_size=batch_size, limit=limit, space=space)
         temperature = fit_temperature(v_logits, v_labels)
         save_calibration(
             model_dir, temperature,
@@ -73,7 +81,7 @@ def main(
         )
         console.print(f"[green]Temperature[/] T={temperature:.4f} saved to {display_path(model_dir / 'calibration.json')}")
 
-    logits, labels = split_logits(clf, tok, cfg.data, split, tok_name, dev, batch_size=batch_size, limit=limit)
+    logits, labels = split_logits(clf, tok, cfg.data, split, tok_name, dev, batch_size=batch_size, limit=limit, space=space)
     report = full_report(logits, labels, names, temperature)
     report["split"] = split
     (model_dir / "eval.json").write_text(json.dumps(report, indent=2))

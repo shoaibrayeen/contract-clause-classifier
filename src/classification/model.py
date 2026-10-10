@@ -22,6 +22,7 @@ log = logging.getLogger(__name__)
 
 CALIBRATION_FILE = "calibration.json"
 LABELS_FILE = "labels.json"
+LABEL_SPACE_FILE = "label_space.json"  # how the dataset's original labels map to this model's labels
 
 
 def load_tokenizer(name_or_path: str | Path) -> PreTrainedTokenizerBase:
@@ -83,12 +84,14 @@ def is_peft(model) -> bool:
     return hasattr(model, "peft_config")
 
 
-def save_checkpoint(model, tokenizer, out_dir: Path, label_names: list[str]) -> None:
-    """Save adapter (LoRA) or full weights + tokenizer + labels."""
+def save_checkpoint(model, tokenizer, out_dir: Path, label_names: list[str], label_space=None) -> None:
+    """Save adapter (LoRA) or full weights + tokenizer + labels (+ the label space used for training)."""
     out_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(out_dir)
     tokenizer.save_pretrained(out_dir)
     save_labels(label_names, out_dir / LABELS_FILE)
+    if label_space is not None:
+        label_space.save(out_dir / LABEL_SPACE_FILE)
 
 
 def load_trained(checkpoint_dir: str | Path, device: torch.device | str = "cpu"):
@@ -124,7 +127,7 @@ def export_merged(checkpoint_dir: str | Path, out_dir: str | Path, dtype: torch.
     out_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(out_dir, safe_serialization=True)
     tok.save_pretrained(out_dir)
-    for extra in (LABELS_FILE, CALIBRATION_FILE):
+    for extra in (LABELS_FILE, LABEL_SPACE_FILE, CALIBRATION_FILE):
         if (checkpoint_dir / extra).exists():
             (out_dir / extra).write_bytes((checkpoint_dir / extra).read_bytes())
     make_readable(out_dir)
@@ -139,6 +142,34 @@ def make_readable(directory: str | Path) -> None:
             f.chmod(0o644)
         elif f.is_dir():
             f.chmod(0o755)
+
+
+def label_space_for_model(model_dir: str | Path, data_cfg, model_label_names: list[str]):
+    """The label space to score `model_dir` against.
+
+    Prefers the label_space.json saved with the model. Older models without it are accepted when their
+    labels equal the currently configured space, or the dataset's original labels; otherwise the model
+    cannot be scored against this dataset and a clear error is raised.
+    """
+    from .data import LabelSpace, build_label_space, get_label_space, get_raw_label_names
+
+    path = Path(model_dir) / LABEL_SPACE_FILE
+    if path.exists():
+        space = LabelSpace.load(path)
+        if space.names != model_label_names:
+            raise ValueError(f"{path} does not match the model's labels")
+        return space
+    current = get_label_space(data_cfg)
+    if current.names == model_label_names:
+        return current
+    raw = get_raw_label_names(data_cfg)
+    if raw == model_label_names:
+        return build_label_space(raw)
+    raise ValueError(
+        f"{model_dir} was trained on {len(model_label_names)} labels that match neither the current label groups "
+        f"({len(current.names)}) nor the original dataset labels ({len(raw)}), and has no {LABEL_SPACE_FILE}. "
+        "Re-export it with the groups file it was trained with, or evaluate with that groups file."
+    )
 
 
 def save_calibration(model_dir: str | Path, temperature: float, **extra) -> None:

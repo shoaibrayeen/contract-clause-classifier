@@ -85,9 +85,11 @@
     <li><strong>Model versions.</strong> Every training run creates <code>&lt;train.run_name&gt;-v&lt;model_version&gt;</code> (first: <code>ledgar-qwen3-0.6b-v1</code>) and no model is ever overwritten. <code>model_version</code> in <code>configs/ledgar_qwen3_0.6b.yaml</code> starts at 1 and <code>make all</code> raises it after the run, evaluation and GIF succeed. Unfinished versions are never replaced silently: <code>make resume</code> continues one, <code>make restart</code> discards and retrains it.</li>
     <li><strong>Multi-version serving.</strong> The API serves every trained version. Requests without <code>model</code> (or with <code>latest</code>) use the newest; a version id such as <code>ledgar-qwen3-0.6b-v1</code> selects that version; a base name selects its latest version. The response's <code>model</code> field names the version that answered. New versions appear without restarting the server; up to <code>MAX_LOADED_MODELS</code> (default 2) stay in memory.</li>
     <li><strong>Playground</strong> at <code>http://localhost:8000/playground</code> (<code>/</code> redirects there): paste text or load a sample, pick a version, adjust top-k and threshold, and see clause types with confidence bars and per-clause predictions.</li>
-    <li><strong>Label grouping</strong> (<code>configs/ledgar_label_groups.yaml</code>, <code>data.label_groups</code>): 49 synonym LEDGAR labels merged into 21 clause types, so 100 labels become 72. On the first run's validation data this alone moves accuracy from 83.0% to 90.0% at the same checkpoint.</li>
+    <li><strong>Label grouping</strong> (<code>configs/ledgar_label_groups.yaml</code>, <code>data.label_groups</code>): 41 LEDGAR labels that denote the same legal concept merged into 19 clause types, so 100 labels become 78. Every merge passed a legal test on the actual provisions and a statistical test on an independent TF-IDF baseline over the full validation split; five candidate merges were rejected (Miscellaneous/General, Remedies/Specific Performance/Enforcements, Taxes vs Withholdings, Fees vs Expenses, Venue vs Jurisdiction). On the first run's checkpoint this moves validation accuracy from 83.0% to 88.9%; the TF-IDF baseline from 87.8% to 91.2%.</li>
     <li><code>scripts/07_models.py</code> and <code>make models</code>, <code>make next</code>, <code>make bump</code>, <code>make adopt RUN=...</code>, <code>make restart</code>, <code>make finish</code>, <code>make rules</code>.</li>
     <li><code>merged/model_info.json</code> per version (id, version, base model, method, label count, label groups, best validation and test scores), shown by <code>make models</code> and <code>/v1/models</code>.</li>
+    <li><code>label_space.json</code> saved with every checkpoint and merged model (label names, the dataset's original labels and their mapping, groups used). <code>make evaluate</code> scores each model against its own label space, so older versions stay evaluable after the groups file changes; a model without the file is accepted only when its labels match the current groups or the original 100.</li>
+    <li><strong>The LEDGAR dataset is committed</strong> (<code>data/raw/ledgar/</code>, 28 MB, CC BY 4.0) so every clone trains and evaluates on identical rows. <code>data/raw/ledgar/README.md</code> credits the sources with the exact download URL, date and SHA-256 checksum of every file plus citations; <code>data/raw/README.md</code> sets the policy for adding data. The Docker image includes the data, so <code>/v1/dataset</code> works without a volume.</li>
     <li>Top-3 accuracy in training evaluations, the test report, <code>make models</code> and <code>/v1/models</code>.</li>
     <li><code>/v1/dataset</code> rows include <code>original_label</code> (LEDGAR's heading) next to <code>label</code> (the clause type the model predicts).</li>
     <li><code>MODEL=</code> on <code>make evaluate</code>, <code>make gif</code> and <code>make predict</code>; <code>--model</code> on <code>03_evaluate.py</code> and <code>04_predict.py</code>; <code>--run latest|&lt;version&gt;</code> and <code>--copy-to</code> on <code>06_render_gif.py</code>.</li>
@@ -97,13 +99,16 @@
   </ul>
   <h3><span class="tag changed">Changed</span></h3>
   <ul>
-    <li><strong>Breaking: default training is full fine-tuning</strong> (all 596M weights, lr 2e-5, 6% warm-up, 3 epochs, label smoothing 0.1, best checkpoint by accuracy) on the 72 merged clause types. Measured about 17% slower than LoRA on an M4 Pro (22.5 GB), about 8 hours for 3 epochs. Set <code>full_finetune: false</code> for LoRA (now r=64).</li>
-    <li><strong>Breaking: models predict 72 clause types instead of 100.</strong> Merged names such as <code>Representations and Warranties</code> replace their parts. Set <code>data.label_groups: null</code> for the original labels. Versions trained before and after this change are not comparable.</li>
+    <li><strong>Breaking: default training is full fine-tuning</strong> (all 596M weights, lr 2e-5, 6% warm-up, 3 epochs, label smoothing 0.1, best checkpoint by accuracy) on the 78 merged clause types. Verified end to end on the real model: about 17% slower than LoRA on an M4 Pro, 25 GB peak memory, about 9 hours for 3 epochs, about 10 GB of disk per version. Set <code>full_finetune: false</code> for LoRA (now r=64).</li>
+    <li><strong>Breaking: models predict 78 clause types instead of 100.</strong> Merged names such as <code>Representations and Warranties</code> replace their parts. Set <code>data.label_groups: null</code> for the original labels. Versions trained before and after this change are not comparable.</li>
     <li><strong>Breaking: run base name is now <code>ledgar-qwen3-0.6b</code></strong> (was <code>ledgar-qwen3-0.6b-lora</code>); runs are saved as <code>ledgar-qwen3-0.6b-v&lt;N&gt;</code>.</li>
     <li><strong>Breaking: API settings.</strong> <code>RUNS_DIR</code> (default <code>artifacts/runs</code>) replaces <code>MODEL_DIR</code> as the model source; <code>MODEL_DIR</code> is now an optional extra folder. <code>MODEL_ID</code> (<code>clause-classifier-qwen3-0.6b</code>) is an alias for the latest version. <code>/health</code> adds <code>latest_model</code>, <code>latest_version</code>, <code>available_models</code>, <code>loaded_models</code> and renames <code>model_dir</code> to <code>models_dir</code>.</li>
     <li>Input is split into provisions by default in the API, CLI and playground (<code>segment: false</code> treats it as one clause). Previously only inputs over 350 words were split.</li>
     <li><code>artifacts/best</code> always points at the latest version rather than the last run.</li>
     <li>Live dashboard: 10 rows of current-batch clause types and validation history, a compact stats block, top-3 accuracy column, and project-relative paths (<code>contract-clause-classifier/artifacts/runs/...</code>).</li>
+    <li><code>build_model</code> re-initialises a mismatched classification head only when the base model already has one; for a causal-LM base any weight mismatch still raises.</li>
+    <li>Config comments now carry the measured evidence for every training setting (loss trend, clipping, hard-example lengths, evaluation time, memory, disk).</li>
+    <li><code>.gitignore</code> allows <code>data/raw/ledgar/</code> and keeps <code>data/cache/</code> ignored.</li>
     <li>Console and API output show project-relative paths instead of <code>/Users/...</code>.</li>
     <li>Docker image serves all versions (<code>RUNS_DIR=/app/artifacts/runs</code>) and includes the label-group file.</li>
   </ul>
@@ -111,7 +116,8 @@
   <ul>
     <li>The live dashboard re-printed itself in short terminals (the panel was taller than the window). It now sizes itself to the terminal.</li>
     <li>Short multi-section contracts were classified as a single clause.</li>
-    <li>Starting training from a checkpoint whose head had a different label count failed (<code>ignore_mismatched_sizes</code>).</li>
+    <li>Starting training from a model that already had a classification head of another size failed.</li>
+    <li>Evaluating a model trained with a different label grouping than the current config crashed (<code>Target 73 is out of bounds</code>); it now uses the model's saved label space.</li>
   </ul>
 </section>
 

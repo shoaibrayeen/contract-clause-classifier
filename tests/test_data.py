@@ -74,3 +74,27 @@ def test_label_groups_merge_and_validate(tiny_data, tmp_path):
     assert set(labels) == {0, 1, 2, 3}
     item = DatasetStore(tiny_data).page("train", 3, 1)["items"][0]  # raw label 3 = Notices
     assert (item["label"], item["original_label"], item["label_id"]) == ("Legal", "Notices", 0)
+
+
+def test_label_space_roundtrip_and_model_lookup(tiny_data, tmp_path):
+    import pytest
+
+    from classification.data import build_label_space, get_label_space, get_raw_label_names
+    from classification.model import LABEL_SPACE_FILE, label_space_for_model
+
+    raw = get_raw_label_names(tiny_data)
+    old = build_label_space(raw, {"Legal": ["Governing Laws", "Notices"]}, source="old.yaml")
+    model_dir = tmp_path / "merged"
+    model_dir.mkdir()
+    old.save(model_dir / LABEL_SPACE_FILE)
+    # A model trained with the old grouping is scored with it even though the config now has no groups.
+    space = label_space_for_model(model_dir, tiny_data, old.names)
+    assert space.names == old.names and space.map([0, 3]) == [0, 0] and space.source == "old.yaml"
+    with pytest.raises(ValueError, match="does not match"):
+        label_space_for_model(model_dir, tiny_data, raw)
+    # Without the file: current space, original labels, or a clear error.
+    (model_dir / LABEL_SPACE_FILE).unlink()
+    assert label_space_for_model(model_dir, tiny_data, get_label_space(tiny_data).names).names == raw
+    assert label_space_for_model(model_dir, tiny_data, raw).names == raw
+    with pytest.raises(ValueError, match="match neither"):
+        label_space_for_model(model_dir, tiny_data, ["Something", "Else"])

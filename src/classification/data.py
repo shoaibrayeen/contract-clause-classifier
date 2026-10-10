@@ -138,6 +138,22 @@ class LabelSpace:
     def map(self, raw_ids: Sequence[int]) -> list[int]:
         return [self.raw_to_id[int(i)] for i in raw_ids]
 
+    def to_dict(self) -> dict:
+        return {"names": self.names, "raw_names": self.raw_names, "raw_to_id": self.raw_to_id,
+                "groups": self.groups, "source": self.source}
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "LabelSpace":
+        return cls(names=list(d["names"]), raw_names=list(d["raw_names"]), raw_to_id=[int(x) for x in d["raw_to_id"]],
+                   groups={k: list(v) for k, v in (d.get("groups") or {}).items()}, source=d.get("source"))
+
+    def save(self, path: str | Path) -> None:
+        Path(path).write_text(json.dumps(self.to_dict(), indent=2))
+
+    @classmethod
+    def load(cls, path: str | Path) -> "LabelSpace":
+        return cls.from_dict(json.loads(Path(path).read_text()))
+
     def name_of_raw(self, raw_id: int) -> str:
         return self.names[self.raw_to_id[int(raw_id)]]
 
@@ -214,14 +230,16 @@ def cache_path(cfg: DataConfig, split: str, tokenizer_name: str) -> Path:
     return resolve_path(cfg.data_dir) / "cache" / f"{cfg.dataset_config}-{tag}-{cfg.max_len}" / f"{split}.parquet"
 
 
-def load_tokenized(cfg: DataConfig, split: str, tokenizer, tokenizer_name: str) -> tuple[list[list[int]], list[int]]:
+def load_tokenized(cfg: DataConfig, split: str, tokenizer, tokenizer_name: str,
+                   space: LabelSpace | None = None) -> tuple[list[list[int]], list[int]]:
     """Tokenise a split once and cache it as parquet (list<int32> column).
 
-    The cache stores the *original* label ids; they are mapped to the configured label space on load,
-    so changing `data.label_groups` never requires re-tokenising.
+    The cache stores the *original* label ids; they are mapped to a label space on load (the configured
+    one, or `space`, e.g. the one saved with the model being evaluated), so changing `data.label_groups`
+    never requires re-tokenising.
     """
     path = cache_path(cfg, split, tokenizer_name)
-    space = get_label_space(cfg)
+    space = space or get_label_space(cfg)
     if path.exists():
         t = pq.read_table(path)
         return t.column("input_ids").to_pylist(), space.map(t.column("label").to_pylist())

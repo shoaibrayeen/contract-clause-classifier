@@ -9,13 +9,14 @@ import torch
 from torch.utils.data import DataLoader
 
 from .config import DataConfig, resolve_autocast_dtype
-from .data import LengthGroupedBatchSampler, TokenizedDataset, load_tokenized, make_collate
+from .data import LabelSpace, LengthGroupedBatchSampler, TokenizedDataset, load_tokenized, make_collate
 from .train import predict_logits
 
 
 def split_logits(model, tok, data_cfg: DataConfig, split: str, tokenizer_name: str, device, precision: str = "auto",
-                 batch_size: int = 32, limit: int | None = None) -> tuple[np.ndarray, np.ndarray]:
-    ids, labels = load_tokenized(data_cfg, split, tok, tokenizer_name)
+                 batch_size: int = 32, limit: int | None = None,
+                 space: LabelSpace | None = None) -> tuple[np.ndarray, np.ndarray]:
+    ids, labels = load_tokenized(data_cfg, split, tok, tokenizer_name, space=space)
     if limit:
         ids, labels = ids[:limit], labels[:limit]
     ds = TokenizedDataset(ids, labels)

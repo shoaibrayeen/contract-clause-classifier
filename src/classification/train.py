@@ -195,6 +195,7 @@ class Trainer:
         (self.run_dir / "config.yaml").write_text(yaml.safe_dump(cfg.to_dict(), sort_keys=False))
 
         label_names = get_label_names(cfg.data)
+        self.label_space = get_label_space(cfg.data)
         num_labels = len(label_names)
         tok = load_tokenizer(cfg.model_name)
         train_loader, val_loader, train_labels = self._loaders(tok)
@@ -468,11 +469,11 @@ class Trainer:
             state["best_macro_f1"] = m["macro_f1"]
             state["best_accuracy"] = m["accuracy"]
             state["bad_evals"] = 0
-            save_checkpoint(model, tok, best_dir, label_names)
+            save_checkpoint(model, tok, best_dir, label_names, self.label_space)
         else:
             state["bad_evals"] += 1
         state["global_step"] = step
-        save_checkpoint(model, tok, last_dir, label_names)
+        save_checkpoint(model, tok, last_dir, label_names, self.label_space)
         torch.save(optimizer.state_dict(), last_dir / "optimizer.pt")
         torch.save(scheduler.state_dict(), last_dir / "scheduler.pt")
         (last_dir / "trainer_state.json").write_text(json.dumps(state))

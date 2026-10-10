@@ -38,7 +38,7 @@ These are the rules every AI assistant must follow in this repository. The full 
 6. **Keep training device-agnostic** (CUDA, Apple MPS, CPU via `config.resolve_device`).
 7. **Tests must pass** (`make test`) and must not download models or need a GPU; add tests for every behaviour change.
 8. **Accuracy claims need evidence** from `make evaluate` or telemetry, naming the split, the label set (72 merged or 100 original) and top-1 vs top-3.
-9. **Security and privacy:** never commit secrets or `.env`; never log or persist contract text; keep `/v1/*` behind `API_KEY` when set; never commit `artifacts/` or `data/`.
+9. **Security and privacy:** never commit secrets or `.env`; never log or persist contract text; keep `/v1/*` behind `API_KEY` when set; never commit `artifacts/` or `data/cache/` (the raw LEDGAR parquet in `data/raw/ledgar/` is committed on purpose).
 10. **Do not commit or push** unless the owner asks.
 11. **Docs move with code:** update README (with sample responses), `docs/`, and the agent files in the same change.
 12. **Finish properly:** update `CHANGELOG.md` and `changelog.html` (kept in sync) and append dated decisions, measurements and gotchas to `MEMORY.md` before reporting a task done.
@@ -110,7 +110,7 @@ How models are trained, named, kept and served. These protect the owner's traine
 6. **Every served model must be traceable.** `merged/model_info.json` records id, version, base model, method, label count, label groups, best validation scores and test scores. Keep writing it when export or evaluation changes.
 7. **Accuracy claims need evidence.** Report accuracy only from `make evaluate` (full test split) or telemetry, and say which split, which label set (72 merged or 100 original) and whether it is top-1 or top-3. Do not promise accuracy the data cannot support; the evidence and ceiling are in README "Accuracy: what to expect" and MEMORY.md.
 8. **Changing what the model learns is a new model.** Changes to `data.label_groups`, the label set, `max_len`, the base model or the loss produce models that are not comparable with earlier versions: note them in the changelog and MEMORY.md, and in the README if user-facing.
-9. **Label groups need evidence.** Only merge labels that the data shows are synonyms (confusion between them in telemetry, or identical meaning). Record the evidence in the groups file header and MEMORY.md.
+9. **Label groups need legal and statistical evidence.** Act as a legal analyst: merge only headings that denote the same legal concept, verified on sample rows, and that the data confuses (see the criterion in `configs/ledgar_label_groups.yaml`). Never merge to inflate accuracy. Record the reasoning and the numbers in the file header and MEMORY.md.
 10. **Never commit models or data.** `artifacts/` and `data/` stay git-ignored; share models by copying `merged/` folders.
 
 ## Changelog rules
@@ -136,15 +136,16 @@ How models are trained, named, kept and served. These protect the owner's traine
 ## Git rules
 
 1. Do not commit, push, tag or open pull requests unless the owner asks. Never force-push or rewrite published history.
-2. Never commit `artifacts/`, `data/`, `.env`, model files (`*.safetensors`, `*.bin`, `*.pt`) or caches; `.gitignore` covers them, do not weaken it.
+2. Never commit `artifacts/`, `data/cache/`, `.env`, model files (`*.safetensors`, `*.bin`, `*.pt`) or caches; `.gitignore` covers them, do not weaken it. The raw LEDGAR files in `data/raw/ledgar/` are committed deliberately (28 MB, CC BY 4.0) so every clone uses identical data; do not add other datasets without the owner's approval.
 3. Commit `uv.lock` together with any `pyproject.toml` change.
 4. Commit messages: an imperative summary of 72 characters or less, a blank line, then why the change was made.
 
 ## Data rules
 
-1. `data/raw/` holds the downloaded LEDGAR parquet: read-only, never edited. Derived data goes to `data/cache/`.
+1. `data/raw/ledgar/` holds the LEDGAR parquet files, committed to the repo with their attribution README: read-only, never edited or regenerated in place. Derived data (tokenisation cache) goes to `data/cache/`, which is git-ignored.
 2. LEDGAR (via LexGLUE) is CC BY 4.0: keep the attribution in the README and in any redistributed model.
 3. Label changes go through `configs/ledgar_label_groups.yaml` (see Model rules 8 and 9), never by editing the data.
+4. **Label grouping is a legal judgement first.** Merge two headings only if a contracts lawyer would call them the same clause type after reading the actual rows (not the heading names), and the statistical test in the groups file also passes. Record both the legal reasoning and the numbers in the file header.
 
 ## Documentation rules
 

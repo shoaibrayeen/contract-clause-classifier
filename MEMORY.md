@@ -4,6 +4,10 @@ Project memory: decisions, measurements and gotchas that are not obvious from th
 
 ## Owner preferences
 
+- Label grouping must be done like a legal analyst: merge only headings that denote the same legal concept, verified on the rows; statistics alone are not enough. (2026-10-11)
+- The dataset is committed to the repo so others get identical data; every file in `data/raw/` must credit its exact download URL, date, checksum and license. (2026-10-11)
+- Wants validation that there are no workarounds and that training is set up for the highest achievable accuracy; accepts evidence-based limits. (2026-10-11)
+
 - Target accuracy is 96-99%. Told the owner (2026-10-11) that 99% top-1 is not reachable on LEDGAR (published SOTA about 88% on 100 labels) and that the default config is expected to reach about 94-96% top-1 on 72 merged clause types, 98%+ top-3. Do not overpromise; quote measured numbers. (2026-10-11)
 - Every training run must be a new model version (`<run_name>-v<N>`, starting at v1, bumped after `make all` completes); all versions are kept; chat completions default to the latest, or the `model` in the payload. (2026-10-11)
 - The owner starts training; never interrupt or alter a running `make all`. While it runs, scripts it will call later (`03_evaluate.py --config --model-dir`, `06_render_gif.py --run <path>`) must keep their CLI, and `pyproject.toml` / `uv.lock` must not change (uv run would re-sync). (2026-10-11)
@@ -21,6 +25,12 @@ Project memory: decisions, measurements and gotchas that are not obvious from th
 - Rendered visuals go in `demo/`. Plans go in `plans/`. (2026-10-11)
 
 ## Design decisions
+
+- **Final label grouping (2026-10-11, legal-analyst review): 19 groups, 41 labels merged, 78 clause types** (replaces the earlier 21 groups / 72 types). Criterion = legal test on sample rows AND statistical test on an independent TF-IDF+LR baseline (87.79% on the full 10k validation; ~8% pairwise mutual confusion or ~40% of a member's errors). Verified by regex on all rows: 75% of "Warranties" rows are represents-and-warrants language (5% product warranties); 75% of "Authorizations" rows are due-authorization reps (8% permits); both waiver labels are no-waiver-by-conduct boilerplate (7% substantive waivers); 77%/48% of Approvals/Consents rows are the consents-and-approvals rep; only 30% of "Taxes" rows concern withholding. Rejected on legal grounds or evidence: Miscellaneous/General (0.9% mutual), Remedies/Specific Performance/Enforcements (3-6%), Taxes vs Withholdings (5.3%), Fees vs Expenses (5.8%), Venues vs jurisdiction labels (0-6%). Effect on the stopped run's step-1,000 confusion matrix: 82.97% -> 88.87% (step 500: 79.6% -> 85.8%); TF-IDF baseline 87.79% -> 91.20%. Rarest class 23 -> 125 train rows; probe set 390. (2026-10-11)
+- **Expected accuracy for the default config: about 92-95% top-1** on 78 clause types (fully trained 100-label models reach ~88%; merge +3 to +6; full FT +1 to +2); 98%+ top-3. Communicated to the owner that 96-99% top-1 is not supported by LEDGAR. (2026-10-11)
+- **Every model saves `label_space.json`** (names, raw names, raw->id map, groups, source) in checkpoints and `merged/`; `scripts/03_evaluate.py` scores a model against its own label space via `model.label_space_for_model`, so changing the groups file never breaks evaluation of older versions. Models without the file are accepted only if their labels equal the current space or the original 100; otherwise a clear error. Found when evaluating the 72-type sanity model against the 78-type config ("Target 73 is out of bounds"). (2026-10-11)
+- **Dataset committed**: `data/raw/ledgar/*.parquet` + `labels.json` + per-file provenance README (exact HF parquet URLs, SHA-256, date, CC BY 4.0, BibTeX); `data/raw/README.md` sets the policy; `data/cache/` stays ignored; the Docker image bakes `data/raw/ledgar` in so `/v1/dataset` works without a mount. (2026-10-11)
+- `build_model` passes `ignore_mismatched_sizes` only when the base already carries a classification head of another size (e.g. retraining from a fine-tuned model); for a causal-LM base nothing is ignored. (2026-10-11)
 
 - **Label grouping (100 -> 72 clause types).** Evidence: first run (LoRA r=16, raw labels, stopped at step 1,288 by the owner) had 82.97% val accuracy at step 1,000; 38% of its 511 errors (3,000-example val subset) were between synonym labels (Applicable Laws->Governing Laws 18, Tax Withholdings->Withholdings 17, Representations->Warranties 17, Definitions->Defined Terms 16, Integration->Entire Agreements 13, ...). Merging 49 labels into 21 groups (`configs/ledgar_label_groups.yaml`) scores the same checkpoint at 90.03% (step 500: 79.6% -> 87.4%). Exact-duplicate label noise is negligible (3 texts). The rarest class grows from 23 to 125 train examples. (2026-10-11)
 - **Default training is full fine-tuning** (lr 2e-5, warmup 6%, 3 epochs, label smoothing 0.1, best checkpoint by accuracy). Measured on M4 Pro with batch 4 random LEDGAR samples: LoRA r16 1.17 s / 19.3 GB, LoRA r64 1.19 s / 19.9 GB, full FT 1.37 s / 22.5 GB per micro-batch. Full FT costs ~17% more time for an expected 1-2 points. Estimated ~2.6 h/epoch, ~8 h for 3 epochs. (2026-10-11)
@@ -48,6 +58,10 @@ Project memory: decisions, measurements and gotchas that are not obvious from th
 
 ## Measurements (Apple M4 Pro, 48 GB, MPS, torch 2.14.1)
 
+- **Full fine-tune path verified end to end** on the real Qwen3-0.6B-Base (320 train rows, 10 optimizer steps of 32): loss 6.16 -> 3.75, 5.4 s/step, 840 tok/s, peak 25.0 GB accelerator memory, gradients clipped at every step; checkpoint-best 2.2 GB, checkpoint-last 6.7 GB (fp32 weights + AdamW state), merged 1.1 GB -> ~10 GB per version. Projection: 5,625 steps ~8.4 h + 11 evals x ~3 min -> ~9 h for 3 epochs. (2026-10-11)
+- Stopped LoRA run (lr 2e-4): loss by step 1-100 3.92, 100-300 1.11, 300-600 0.79, 600-900 0.67, 900-1288 0.61; batch accuracy 0.25 -> 0.83; grad norm 20 -> 5 (clip 1.0 active 100% of steps); eval on 3,000 rows took 159-177 s. 10% of late examples still had loss > 2, dominated by General, Applicable Laws, Authority, Payments, Miscellaneous, Enforcements; hard examples were not longer (2.6% vs 1.9% truncated), so max_len 512 stays. (2026-10-11)
+- TF-IDF (1-2 grams, 300k features) + logistic regression: 87.79% on the full 10k validation, 176 s to train; useful as an independent, model-free check of label noise. (2026-10-11)
+
 - LoRA training: about 990 tokens/s, about 4.4 s per optimizer step (32 examples), so 2 epochs (3,750 steps) take about 5 hours including evals. (2026-10-11)
 - Micro-batch 8: MPS driver memory about 35 GB and system swap nearly full; steps slowed from 3.7 s to 8 s. Micro-batch 4 with accumulation 8: about 19.5 GB, same throughput. (2026-10-11)
 - bf16 autocast on MPS: no faster than fp32 (1.01 s vs 0.99 s per 8×160 batch), so `precision: auto` uses fp32 on MPS. (2026-10-11)
@@ -56,6 +70,9 @@ Project memory: decisions, measurements and gotchas that are not obvious from th
 - Sanity run (256 examples, 64 steps): val accuracy 0.8% → 17.6%, proving the loop learns; training loss on a 256-example subset reaches about 0.0002 when run longer. (2026-10-11)
 
 ## Gotchas
+
+- Changing `configs/ledgar_label_groups.yaml` changes the label space of *new* models only; evaluating an older model needs its saved `label_space.json` (now written automatically). The sanity model trained before this fix had the file reconstructed by hand. (2026-10-11)
+- A random-init tiny Qwen3 for CPU tests must set `layer_types` to match `num_hidden_layers` or `save_pretrained` fails validation. (2026-10-11)
 
 - The live dashboard re-printed itself ("repeated boxes") because the panel was taller than the terminal; rich cannot redraw above the top of the screen. The panel now computes rows from the terminal height (`_rows_that_fit`, chrome = 13 lines) and Live uses `vertical_overflow="crop"`. `tests/test_dashboard.py` checks heights 20-60. (2026-10-11)
 - The tokenisation cache stores original LEDGAR label ids; `data.get_label_space` maps them, so changing groups never needs re-tokenising. Old caches stay valid. (2026-10-11)
