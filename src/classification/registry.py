@@ -260,6 +260,11 @@ def plan_training_run(runs_dir: str | Path, base_name: str, version: int, resume
             continue
         if has_content(d):
             if resume:
+                if not (d / "checkpoint-last" / "trainer_state.json").exists():
+                    raise RegistryError(
+                        f"{name} has no checkpoint to resume from (it stopped before its first evaluation).\n"
+                        f"  Start it again from scratch:  make restart"
+                    )
                 return name, v, notes
             if restart:
                 shutil.rmtree(d)

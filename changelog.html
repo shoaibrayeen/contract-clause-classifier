@@ -117,6 +117,7 @@
     <li>The live dashboard re-printed itself in short terminals (the panel was taller than the window). It now sizes itself to the terminal.</li>
     <li>Short multi-section contracts were classified as a single clause.</li>
     <li>Starting training from a model that already had a classification head of another size failed.</li>
+    <li><code>make resume</code> on a run that died before its first checkpoint would have restarted it in place and appended duplicate telemetry; it now stops and points to <code>make restart</code>.</li>
     <li>Evaluating a model trained with a different label grouping than the current config crashed (<code>Target 73 is out of bounds</code>); it now uses the model's saved label space.</li>
   </ul>
 </section>

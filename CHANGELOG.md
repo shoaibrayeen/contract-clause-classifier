@@ -43,6 +43,7 @@ Model versioning, accuracy-focused training defaults, a browser playground, and 
 - The live dashboard re-printed itself in short terminals (the panel was taller than the window). It now sizes itself to the terminal.
 - Short multi-section contracts were classified as a single clause.
 - Starting training from a model that already had a classification head of another size failed.
+- `make resume` on a run that died before its first checkpoint would have restarted it in place and appended duplicate telemetry; it now stops and points to `make restart`.
 - Evaluating a model trained with a different label grouping than the current config crashed (`Target 73 is out of bounds`); it now uses the model's saved label space.
 
 ## [0.1.0] - 2026-10-11

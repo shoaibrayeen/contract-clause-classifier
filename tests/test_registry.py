@@ -198,3 +198,11 @@ def test_update_model_info_creates_file_for_legacy_runs(runs):
     (run / "merged" / "model_info.json").unlink()
     info = update_model_info(run / "merged", test={"accuracy": 0.9})
     assert info["id"] == "old-run" and info["version"] is None and info["test"]["accuracy"] == 0.9
+
+
+def test_resume_needs_a_checkpoint(runs):
+    run = make_run(runs, f"{BASE}-v1", 100, complete=False)
+    (run / "checkpoint-last" / "trainer_state.json").unlink()  # died before the first evaluation
+    with pytest.raises(RegistryError, match="make restart"):
+        plan_training_run(runs, BASE, 1, resume=True)
+    assert plan_training_run(runs, BASE, 1, restart=True)[0] == f"{BASE}-v1"

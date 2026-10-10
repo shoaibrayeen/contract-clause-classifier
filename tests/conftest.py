@@ -63,6 +63,7 @@ def make_run(runs_dir, name, created, version="auto", complete=True, base=None):
 
     run = runs_dir / name
     (run / "checkpoint-last").mkdir(parents=True, exist_ok=True)
+    (run / "checkpoint-last" / "trainer_state.json").write_text('{"global_step": 500}')
     if complete:
         (run / "merged").mkdir(parents=True, exist_ok=True)
         (run / "merged" / "config.json").write_text("{}")
