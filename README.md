@@ -2,7 +2,7 @@
 
 Fine-tune a ~0.6B language model (Qwen3-0.6B) to recognise **clause types in contracts**, then serve it through an **OpenAI-compatible FastAPI**.
 
-Give it a contract (text, PDF or DOCX). It splits the contract into provisions, classifies each one into one of **100 clause types**, and returns calibrated confidences:
+Give it a contract (text, PDF or DOCX). It splits the contract into provisions, classifies each one into one of **72 clause types** (LEDGAR's 100 labels with synonyms merged), and returns calibrated confidences:
 
 ```json
 {
@@ -19,7 +19,7 @@ Give it a contract (text, PDF or DOCX). It splits the contract into provisions, 
 }
 ```
 
-Training runs on **any machine** (Apple Silicon MPS, NVIDIA CUDA or CPU, auto-detected). While it trains, a **live dashboard** prints in the terminal and **every step is recorded** to disk so the run can be replayed as charts, a GIF or a video later.
+Training runs on **any machine** (Apple Silicon MPS, NVIDIA CUDA or CPU, auto-detected). While it trains, a **live dashboard** prints in the terminal and **every step is recorded** to disk so the run can be replayed as charts, a GIF or a video later. Every training run produces a new **model version** (`ledgar-qwen3-0.6b-v1`, `-v2`, …) and no model is ever overwritten. The API serves all versions, defaults to the latest, and includes a browser **playground**.
 
 ![Sanity-run telemetry rendered as a GIF](demo/sanity_training.gif)
 
@@ -29,23 +29,25 @@ Training runs on **any machine** (Apple Silicon MPS, NVIDIA CUDA or CPU, auto-de
 
 1. [How it works](#how-it-works)
 2. [Training data](#training-data)
-3. [Requirements](#requirements)
-4. [Setup](#setup)
-5. [Run the full pipeline](#run-the-full-pipeline)
-6. [Training in detail](#training-in-detail)
-7. [Training telemetry and visualisation](#training-telemetry-and-visualisation)
-8. [Evaluation](#evaluation)
-9. [Predict from the command line](#predict-from-the-command-line)
-10. [API (FastAPI, OpenAI-compatible)](#api-fastapi-openai-compatible)
-11. [Docker](#docker)
-12. [Project layout](#project-layout)
-13. [Configuration reference](#configuration-reference)
-14. [Testing](#testing)
-15. [Troubleshooting](#troubleshooting)
-16. [Pinned versions](#pinned-versions)
-17. [License](#license)
-18. [Author](#author)
-
+3. [Accuracy: what to expect](#accuracy-what-to-expect)
+4. [Requirements](#requirements)
+5. [Setup](#setup)
+6. [Run the full pipeline](#run-the-full-pipeline)
+7. [Model versions](#model-versions)
+8. [Training in detail](#training-in-detail)
+9. [Training telemetry and visualisation](#training-telemetry-and-visualisation)
+10. [Evaluation](#evaluation)
+11. [Predict from the command line](#predict-from-the-command-line)
+12. [Playground](#playground)
+13. [API (FastAPI, OpenAI-compatible)](#api-fastapi-openai-compatible)
+14. [Docker](#docker)
+15. [Project layout](#project-layout)
+16. [Configuration reference](#configuration-reference)
+17. [Testing](#testing)
+18. [Troubleshooting](#troubleshooting)
+19. [Pinned versions](#pinned-versions)
+20. [License](#license)
+21. [Author](#author)
 ---
 
 ## How it works
@@ -55,7 +57,7 @@ contract (.txt / .pdf / .docx, or the user message of a chat request)
    │  segment.py   split into provisions (numbered sections, headings, paragraphs)
    ▼
 [provision 1 … provision n]
-   │  Qwen3-0.6B-Base + LoRA adapters + 100-way classification head
+   │  Qwen3-0.6B-Base, fully fine-tuned, + 72-way classification head
    │  (last-token pooling, temperature-scaled softmax)
    ▼
 per-provision top-k [{name, confidence}]
@@ -66,9 +68,10 @@ per-provision top-k [{name, confidence}]
 
 | Choice | What | Why |
 |---|---|---|
-| Dataset | [LEDGAR](https://huggingface.co/datasets/coastalcph/lex_glue) (LexGLUE) | 80,000 real contract provisions from SEC filings, 100 clause types, chronological train/validation/test split (60k / 10k / 10k). Not CUAD, by design. |
+| Dataset | [LEDGAR](https://huggingface.co/datasets/coastalcph/lex_glue) (LexGLUE) | 80,000 real contract provisions from SEC filings, chronological train/validation/test split (60k / 10k / 10k). Not CUAD, by design. |
+| Labels | 100 LEDGAR labels merged into 72 clause types | 21 groups of synonyms ("Applicable Laws" = "Governing Laws", …) that no model can tell apart. See [Training data](#training-data). |
 | Model | [Qwen/Qwen3-0.6B-Base](https://huggingface.co/Qwen/Qwen3-0.6B-Base) | 0.6B parameters, Apache-2.0, strong for its size. Swap to `Qwen/Qwen2.5-0.5B` or `HuggingFaceTB/SmolLM2-360M` with one config line. |
-| Method | LoRA (r=16) on all attention and MLP projections + trainable head | 10.2M trainable of 606M parameters. Fits comfortably on a 48 GB Mac. Full fine-tuning is one flag. |
+| Method | Full fine-tuning (all 596M weights), label smoothing 0.1, 3 epochs, early stopping on accuracy | Measured only about 17% slower than LoRA on an M4 Pro and usually 1 to 2 points more accurate. LoRA (r=64) is one flag away. |
 | Framework | PyTorch + Hugging Face `transformers` + `peft` | Same code on MPS, CUDA and CPU. |
 | Confidence | Softmax with temperature scaling fitted on validation | Confidences are calibrated, so 0.9 means right about 90% of the time. |
 
@@ -86,12 +89,12 @@ The model is trained on **LEDGAR** (Labeled EDGAR), as packaged in the [LexGLUE 
 |---|---|
 | Source | Provisions (paragraphs) of commercial contracts filed with the US Securities and Exchange Commission and published on EDGAR, which is public information. Collected by Tuggener et al., [LREC 2020](https://aclanthology.org/2020.lrec-1.155). |
 | Size | 80,000 provisions from 12,000+ contracts: **60,000 train** (filed 2016 to 2017), **10,000 validation** (2018), **10,000 test** (2019). The chronological split means the test set is newer than the training set. |
-| Labels | **100 clause types**, one per provision, chosen by LexGLUE as the 100 most frequent of the original 12,000+ section headings. |
+| Labels | **100 labels**, one per provision, chosen by LexGLUE as the 100 most frequent of the original 12,000+ section headings. This project merges synonyms into **72 clause types** (below). |
 | Text | English. Average provision is 114 words (median 86); with the Qwen3 tokenizer, mean 138 tokens and 1.9% longer than the 512-token limit. |
 | Format | Two columns, `text` and `label` (an integer id into the label list). Downloaded as three parquet files (28 MB). |
 | License | LexGLUE is published under **CC BY 4.0**; the underlying filings are public SEC records. See [License](#license). |
 
-The 100 clause types:
+The 100 original labels:
 
 > Adjustments, Agreements, Amendments, Anti-Corruption Laws, Applicable Laws, Approvals, Arbitration, Assignments, Assigns, Authority, Authorizations, Base Salary, Benefits, Binding Effects, Books, Brokers, Capitalization, Change In Control, Closings, Compliance With Laws, Confidentiality, Consent To Jurisdiction, Consents, Construction, Cooperation, Costs, Counterparts, Death, Defined Terms, Definitions, Disability, Disclosures, Duties, Effective Dates, Effectiveness, Employment, Enforceability, Enforcements, Entire Agreements, Erisa, Existence, Expenses, Fees, Financial Statements, Forfeitures, Further Assurances, General, Governing Laws, Headings, Indemnifications, Indemnity, Insurances, Integration, Intellectual Property, Interests, Interpretations, Jurisdictions, Liens, Litigations, Miscellaneous, Modifications, No Conflicts, No Defaults, No Waivers, Non-Disparagement, Notices, Organizations, Participations, Payments, Positions, Powers, Publicity, Qualifications, Records, Releases, Remedies, Representations, Sales, Sanctions, Severability, Solvency, Specific Performance, Submission To Jurisdiction, Subsidiaries, Successors, Survival, Tax Withholdings, Taxes, Terminations, Terms, Titles, Transactions With Affiliates, Use Of Proceeds, Vacations, Venues, Vesting, Waiver Of Jury Trials, Waivers, Warranties, Withholdings
 
@@ -109,6 +112,60 @@ Browse the data yourself with `make data` and then `GET /v1/dataset?split=train&
 
 **What the model does not learn from this data.** LEDGAR labels one clause type per provision and contains no annotation of risk, parties, dates or obligations. Multi-label output for a whole contract comes from splitting it into provisions. Provisions written in styles far from SEC-filed commercial contracts (consumer terms, non-English text) will be classified less reliably.
 
+
+### Label grouping: 100 labels become 72 clause types
+
+LEDGAR's label is the heading each drafter happened to choose, so one clause type often appears under several names. In the first training run (LoRA, raw labels, stopped at step 1,288), **38% of all validation errors were between such synonyms**: Applicable Laws vs Governing Laws (18 errors in 3,000), Tax Withholdings vs Withholdings (17), Representations vs Warranties (17), Definitions vs Defined Terms (16), Integration vs Entire Agreements (13), and so on. The text gives no way to tell them apart, so these are label noise, not model mistakes.
+
+[configs/ledgar_label_groups.yaml](configs/ledgar_label_groups.yaml) merges 49 such labels into 21 canonical clause types:
+
+| Clause type | Original LEDGAR labels |
+|---|---|
+| Governing Laws | Governing Laws, Applicable Laws |
+| Taxes and Withholdings | Taxes, Withholdings, Tax Withholdings |
+| Representations and Warranties | Representations, Warranties |
+| Definitions | Definitions, Defined Terms |
+| Entire Agreements | Entire Agreements, Integration |
+| Construction | Construction, Interpretations |
+| Authority | Authority, Authorizations |
+| Successors and Assigns | Successors, Assigns, Binding Effects |
+| Indemnifications | Indemnifications, Indemnity |
+| Organization and Existence | Organizations, Existence, Qualifications |
+| Amendments | Amendments, Modifications |
+| Fees and Expenses | Fees, Expenses, Costs |
+| Jurisdiction and Venue | Jurisdictions, Submission To Jurisdiction, Consent To Jurisdiction, Venues |
+| Waivers | Waivers, No Waivers |
+| Effectiveness | Effectiveness, Effective Dates |
+| Duties and Positions | Duties, Positions |
+| Books and Records | Books, Records |
+| Consents and Approvals | Consents, Approvals |
+| Sanctions and Anti-Corruption Laws | Sanctions, Anti-Corruption Laws |
+| Remedies | Remedies, Specific Performance, Enforcements |
+| Miscellaneous | Miscellaneous, General |
+
+The other 51 labels keep their names. Measured on the first run's validation confusion matrix at the same checkpoint, this alone moves accuracy from **83.0% to 90.0%** (40% fewer errors), and the rarest class grows from 23 to 125 training examples. Set `data.label_groups: null` in the config to train on the original 100 labels. `/v1/dataset` shows both the clause type (`label`) and the original heading (`original_label`) for every row.
+
+---
+
+## Accuracy: what to expect
+
+The target for this project is 96 to 99% accuracy. Here is what the evidence supports, so the number you see after training is not a surprise.
+
+| Setting | Top-1 accuracy | Source |
+|---|---|---|
+| Published state of the art on LEDGAR, 100 labels (BERT, RoBERTa, DeBERTa-class models) | about 88% | [LexGLUE](https://arxiv.org/abs/2110.00976) |
+| First run here: LoRA r=16, 100 labels, half an epoch | 83.0% | measured |
+| Same checkpoint scored on the 72 merged clause types | 90.0% | measured |
+| Default config: 72 clause types, full fine-tune, 3 epochs | **expected about 94 to 96%** | estimate: merged-label gain on top of a fully trained model |
+| Top-3 accuracy (right clause among the three suggestions) | expected 98% or more | reported by `make evaluate` |
+
+So 96% top-1 is at the edge of what this data allows, and 99% top-1 is not reachable on LEDGAR. The remaining errors are mostly genuinely overlapping clause types, such as Terms vs Terminations or Enforceability vs Successors and Assigns. The levers that would go further:
+
+1. **Merge more clause types** that you consider the same for your use case (edit the groups file; no re-tokenising needed).
+2. **Use the top-3 output**: the API already returns the top-k labels with calibrated confidences, and top-3 accuracy is expected at 98% or more.
+3. **Train on your own labelled contracts** with your own taxonomy. Consistent labels are the single biggest factor; a cleanly labelled in-house set routinely reaches 97 to 99% with this model size.
+4. **A larger backbone** (for example Qwen3-1.7B) typically adds 1 to 2 points at three times the training time.
+
 ---
 
 ## Requirements
@@ -116,17 +173,17 @@ Browse the data yourself with `make data` and then `GET /v1/dataset?split=train&
 | | Minimum | Tested |
 |---|---|---|
 | OS | macOS on Apple Silicon, or Linux | macOS 26 on Apple M4 Pro, 48 GB |
-| Memory | 24 GB unified memory / RAM for training | about 20 GB of accelerator memory with the default config |
+| Memory | 32 GB unified memory / RAM for training (24 GB with `full_finetune: false`) | about 22.5 GB of accelerator memory with the default config |
 | Disk | 10 GB free | base model 1.2 GB, data 0.1 GB, each run about 2 GB |
 | Python | 3.12 (installed by uv automatically) | 3.12.13 |
 | Tools | [uv](https://docs.astral.sh/uv/), `make`; Docker optional | uv 0.11, Docker 29 |
 
-Training time for the default config (2 epochs, 3,750 optimizer steps):
+Training time for the default config (full fine-tune, up to 3 epochs, 5,625 optimizer steps; early stopping often ends sooner):
 
 | Hardware | Time |
 |---|---|
-| Apple M4 Pro (MPS) | about 5 hours |
-| Modern NVIDIA GPU (CUDA, bf16) | about 30 to 50 minutes |
+| Apple M4 Pro (MPS) | about 8 hours for 3 epochs (about 2.6 hours per epoch) |
+| Modern NVIDIA GPU (CUDA, bf16) | about 1 to 1.5 hours |
 
 ---
 
@@ -165,67 +222,111 @@ One command runs everything: download data, train with the live dashboard, evalu
 make all
 ```
 
-Or step by step:
+`make all` trains the next model version (see [Model versions](#model-versions)), evaluates it, renders its GIF into `demo/`, raises `model_version` in the config, and lists all models. Or step by step:
 
 ```bash
 make data       # 1. download LEDGAR (28 MB) and tokenize all splits
-make train      # 2. fine-tune; live dashboard in the terminal, telemetry saved to disk
-make evaluate   # 3. fit confidence calibration on validation, report test metrics
-make gif        # 4. render the run's telemetry to a GIF (also copied to demo/)
-make predict    # 5. classify demo/sample_contract.txt
-make serve      # 6. start the API on http://localhost:8000  (docs at /docs)
+make train      # 2. train the next version, e.g. ledgar-qwen3-0.6b-v1; live dashboard + telemetry
+make evaluate   # 3. calibrate confidences on validation, report test metrics (latest model)
+make gif        # 4. render the latest model's telemetry to a GIF (also copied to demo/)
+make bump       # 5. raise model_version so the next run becomes -v2
+make predict    # classify demo/sample_contract.txt with the latest model
+make serve      # API + playground on http://localhost:8000/playground
 ```
 
 Each `make` target is a thin wrapper; the underlying commands are in the [Makefile](Makefile) (`make help` lists them).
 
-**Where the trained model goes.** Every run writes to `artifacts/runs/<run-name>/`. When training ends, the best checkpoint is merged into a standalone model at `artifacts/runs/<run-name>/merged/`, and the link `artifacts/best` is pointed at it. The CLI, the API and Docker all load `artifacts/best`.
+**Where the trained model goes.** Each version gets its own folder, `artifacts/runs/ledgar-qwen3-0.6b-v<N>/`, with the servable model in `merged/`. Nothing is overwritten. `artifacts/best` always links to the latest version for convenience; the API, the CLI and Docker read the versions directly.
+
+---
+
+## Model versions
+
+`model_version` in [configs/ledgar_qwen3_0.6b.yaml](configs/ledgar_qwen3_0.6b.yaml) is the version the **next** training run will produce. It starts at 1.
+
+```text
+model_version: 1  ->  make all  ->  trains artifacts/runs/ledgar-qwen3-0.6b-v1  ->  evaluate, GIF  ->  model_version: 2
+model_version: 2  ->  make all  ->  trains artifacts/runs/ledgar-qwen3-0.6b-v2  ->  evaluate, GIF  ->  model_version: 3
+```
+
+Rules:
+
+* **Never overwrite.** If `-v<N>` already exists and is complete, training moves on to the next free version and says so.
+* **Bump only on success.** `make bump` (the last step of `make all`) raises the version only if `-v<N>` finished. A failed or interrupted run is retried under the same version.
+* **Unfinished runs are never silently replaced.** If `-v<N>` exists but did not finish, training stops and tells you to run `make resume` (continue from the last checkpoint) or `make restart` (delete it and start over). Both then evaluate, render the GIF and bump.
+* **Latest** means the newest completed versioned model. Explicitly named runs such as `make sanity` are never "latest" while a versioned model exists.
+* The base name comes from `train.run_name` (`ledgar-qwen3-0.6b`). Change it to start a separate series, for example `ledgar-qwen3-0.6b-lora`.
+
+```bash
+make models                     # list every version with validation and test metrics; latest is marked
+make next                       # the name the next run will use
+make evaluate MODEL=ledgar-qwen3-0.6b-v1    # any command that takes MODEL= accepts a version id or "latest"
+make predict FILE=contract.pdf MODEL=ledgar-qwen3-0.6b-v1
+make adopt RUN=ledgar-qwen3-0.6b-lora       # turn a finished unversioned run into the next version
+```
+
+Sample `make models` output:
+
+```text
+                               Models in contract-clause-classifier/artifacts/runs
+┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━┓
+┃ model                ┃ version ┃ created          ┃ val acc ┃ val macro-F1 ┃ test acc ┃ test top-3 ┃ test macro-F1 ┃        ┃
+┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━┩
+│ ledgar-qwen3-0.6b-v1 │ 1       │ 2026-10-12 06:10 │ ...     │ ...          │ ...      │ ...        │ ...           │        │
+│ ledgar-qwen3-0.6b-v2 │ 2       │ 2026-10-14 07:42 │ ...     │ ...          │ ...      │ ...        │ ...           │ latest │
+└──────────────────────┴─────────┴──────────────────┴─────────┴──────────────┴──────────┴────────────┴───────────────┴────────┘
+Next training run: model_version=3 in contract-clause-classifier/configs/ledgar_qwen3_0.6b.yaml
+```
+
+Each version's `merged/model_info.json` records its id, version, creation time, base model, method, label count, best validation scores and, after `make evaluate`, its test scores.
 
 ---
 
 ## Training in detail
 
 ```bash
-make train                                   # default run name: ledgar-qwen3-0.6b-lora
-make train RUN=my-experiment                 # different run name
-make resume                                  # continue after Ctrl-C, a crash or a reboot
-make sanity                                  # 5-minute smoke test on 256 examples
+make train                     # trains the next version (ledgar-qwen3-0.6b-v<model_version>)
+make resume                    # continue an interrupted version, then evaluate, GIF and bump
+make restart                   # discard an unfinished version and train it again from scratch
+make sanity                    # 5-minute smoke test on 256 examples (unversioned run "sanity")
 ```
 
 Direct invocation with overrides (any config value can also be changed in the YAML):
 
 ```bash
-uv run python scripts/02_train.py --run-name exp2 --epochs 3 --lr 1e-4
-uv run python scripts/02_train.py --model-name Qwen/Qwen2.5-0.5B --run-name qwen25
+uv run python scripts/02_train.py --epochs 2 --lr 3e-5             # next version with overrides
+uv run python scripts/02_train.py --model-name Qwen/Qwen2.5-0.5B     # different backbone
+uv run python scripts/02_train.py --run-name my-experiment         # explicit name, no version suffix
 uv run python scripts/02_train.py --device cpu --limit 2000          # force CPU, subset
 ```
 
 ### What you see in the terminal
 
-A live panel refreshes twice a second: progress and ETA, loss and smoothed loss with a trend sparkline, learning rate, gradient norm (and whether it was clipped), tokens per second, padding ratio, accelerator memory, CPU and RAM, the clause types in the current batch, and the latest validation results. If output is redirected to a file, it prints one plain log line every 10 steps instead.
+A live panel refreshes twice a second: progress and ETA, loss and smoothed loss with a trend sparkline, learning rate, gradient norm (and whether it was clipped), tokens per second, padding ratio, accelerator memory, CPU and RAM, the top 10 clause types in the current batch, and the last 10 validation results (accuracy, top-3 accuracy, macro-F1). Paths are shown relative to the project, for example `contract-clause-classifier/artifacts/runs/ledgar-qwen3-0.6b-v1`. The panel sizes itself to the terminal window so it redraws in place; in a short window it shows fewer table rows. If output is redirected to a file, it prints one plain log line every 10 steps instead.
 
 ### What happens during a run
 
-1. The Qwen3 backbone is loaded and LoRA adapters plus a 100-way head are attached.
+1. The Qwen3 backbone is loaded with a fresh 72-way classification head (all weights train; LoRA adapters instead when `full_finetune: false`).
 2. Batches are grouped by length to cut padding (about 2% padding instead of about 50%).
-3. Every 500 optimizer steps it evaluates on a fixed 3,000-example validation subset, saves `checkpoint-last/` (with optimizer state for resume), and keeps `checkpoint-best/` by macro-F1. Training stops early after 4 evaluations without improvement.
-4. At the end, `checkpoint-best/` is merged into `merged/` and `artifacts/best` is updated.
+3. Every 500 optimizer steps it evaluates on a fixed 3,000-example validation subset, saves `checkpoint-last/` (with optimizer state for resume), and keeps `checkpoint-best/` by accuracy (`train.best_metric`). Training stops early after 4 evaluations without improvement.
+4. At the end, `checkpoint-best/` becomes the standalone model in `merged/` with a `model_info.json`, and `artifacts/best` is pointed at the latest version.
 
 ### Run directory
 
 ```
-artifacts/runs/<run-name>/
+artifacts/runs/ledgar-qwen3-0.6b-v<N>/
 ├── config.yaml          resolved config used for the run
 ├── metrics.jsonl        compact log (every 10 steps + each eval)
-├── checkpoint-best/     best LoRA adapter + head + tokenizer
+├── checkpoint-best/     best weights (or LoRA adapter) + tokenizer
 ├── checkpoint-last/     latest adapter + optimizer/scheduler state (for --resume)
-├── merged/              standalone serving model (bf16 safetensors, labels.json, calibration.json, eval.json)
+├── merged/              standalone serving model (bf16 safetensors, labels.json, model_info.json, calibration.json, eval.json)
 ├── telemetry/           everything needed to replay the run (next section)
 └── visuals/             training.gif / training.png (after `make gif`)
 ```
 
 ### Memory notes for Apple Silicon
 
-The default micro-batch is 4 with 8 accumulation steps (effective batch 32). A micro-batch of 8 pushes the MPS allocator past 35 GB and starts swapping on a 48 GB machine. The trainer also releases cached accelerator memory every 25 steps. Closing heavy apps (browsers, Docker VMs) during training helps.
+The default micro-batch is 4 with 8 accumulation steps (effective batch 32). Full fine-tuning then uses about 22.5 GB of accelerator memory; LoRA about 19 GB. A micro-batch of 8 pushes the MPS allocator past 35 GB and starts swapping on a 48 GB machine. The trainer also releases cached accelerator memory every 25 steps. Closing heavy apps (browsers, Docker VMs) during training helps.
 
 ---
 
@@ -238,7 +339,7 @@ Every run records its full history to `artifacts/runs/<run-name>/telemetry/`. Fi
 | `meta.json` | config, hardware and software versions, dataset statistics (label counts, length histograms), probe-set ids, label names |
 | `steps.jsonl` | one line per optimizer step: loss, learning rate, gradient norm, clipping, step time, tokens/s, padding, memory, and the batch itself: example ids, labels, lengths, per-example loss and correctness |
 | `layers.jsonl` | every 10 steps: gradient norm of each of the 28 transformer layers and the head |
-| `evals.jsonl` | each evaluation: accuracy, macro-F1, loss, per-class F1 for all 100 types, LoRA weight norm per layer |
+| `evals.jsonl` | each evaluation: accuracy, top-3 accuracy, macro-F1, loss, per-class F1 for every clause type, trainable weight norm per layer |
 | `evals/step_*.npz` | each evaluation: 100x100 confusion matrix and calibration bins |
 | `snapshots/step_*.npz` | at step 0 and each evaluation, for a fixed probe set of about 500 validation examples: predicted probabilities, final-layer embeddings, per-layer activation norms, and full per-layer vectors for about 100 of them |
 | `events.jsonl` | start, snapshot, eval, checkpoint, early stop, done |
@@ -249,7 +350,8 @@ Together these show how the loss fell, which clause types the model learned firs
 Render a GIF at any time, including mid-training:
 
 ```bash
-make gif                                          # default run, copies to demo/
+make gif                                          # latest model, copies to demo/
+make gif MODEL=ledgar-qwen3-0.6b-v1               # a specific version
 uv run python scripts/06_render_gif.py --run artifacts/runs/sanity --frames 80 --fps 10
 ```
 
@@ -258,13 +360,14 @@ uv run python scripts/06_render_gif.py --run artifacts/runs/sanity --frames 80 -
 ## Evaluation
 
 ```bash
-make evaluate
-uv run python scripts/03_evaluate.py --model-dir artifacts/runs/<run>/merged --limit 1000   # quick
+make evaluate                                   # latest model
+make evaluate MODEL=ledgar-qwen3-0.6b-v1        # a specific version
+uv run python scripts/03_evaluate.py --model-dir artifacts/runs/<run>/merged --limit 1000   # any folder, quick
 ```
 
-It fits a temperature on the validation split, writes `calibration.json` next to the model (the API applies it automatically), and writes `eval.json` with test accuracy, micro, macro and weighted F1, log loss, calibration error before and after scaling, per-class precision and recall, and the most frequent confusions.
+It fits a temperature on the validation split, writes `calibration.json` next to the model (the API applies it automatically, even if it is already running), and writes `eval.json` with test accuracy, top-3 accuracy, micro, macro and weighted F1, log loss, calibration error before and after scaling, per-class precision and recall, and the most frequent confusions. The headline numbers are also stored in the model's `model_info.json`, so `make models` and `/v1/models` show them.
 
-Reference points on the LEDGAR test set from the [LexGLUE paper](https://arxiv.org/abs/2110.00976): BERT-class encoders reach about 87 to 88 micro-F1 and 81 to 83 macro-F1. This project targets micro-F1 of 85 or better.
+See [Accuracy: what to expect](#accuracy-what-to-expect) for reference numbers.
 
 ---
 
@@ -274,9 +377,10 @@ Reference points on the LEDGAR test set from the [LexGLUE paper](https://arxiv.o
 uv run python scripts/04_predict.py demo/sample_contract.txt
 uv run python scripts/04_predict.py path/to/contract.pdf --top-k 5 --threshold 0.2 --out result.json
 uv run python scripts/04_predict.py --text "This Agreement shall be governed by the laws of New York."
+uv run python scripts/04_predict.py contract.pdf --model ledgar-qwen3-0.6b-v1     # a specific version
 ```
 
-Inputs: `.txt`, `.md`, `.pdf` with a text layer, `.docx`. Scanned PDFs need OCR first.
+The latest model is used unless `--model` names a version. Input is split into provisions by default; `--no-segment` classifies it as one clause. Inputs: `.txt`, `.md`, `.pdf` with a text layer, `.docx`. Scanned PDFs need OCR first.
 
 Sample output for the `--text` call:
 
@@ -304,20 +408,37 @@ Sample output for the `--text` call:
 
 ---
 
+## Playground
+
+```bash
+make serve          # then open http://localhost:8000/playground
+```
+
+A single page served by the API (no extra dependencies). Paste a clause or a whole contract, or load one of the samples, pick a model version (the latest is preselected), adjust top-k and the confidence threshold, and press **Classify** (or Ctrl/Cmd + Enter). It shows:
+
+* **Clause types found**: every clause type detected in the input, with a confidence bar.
+* **Per clause**: each provision the input was split into, with its top predictions and confidences (below 50% shown in amber).
+* The model version that answered, latency, token count, and the raw API response.
+
+The status pill shows the latest model and device. Before any model is trained it explains how to train one. If the server has an `API_KEY`, the page asks for it. `http://localhost:8000/` redirects to the playground.
+
+---
+
 ## API (FastAPI, OpenAI-compatible)
 
 ```bash
-make serve                       # http://localhost:8000, Swagger UI at /docs, schema at /openapi.json
+make serve                       # http://localhost:8000; playground at /playground, Swagger UI at /docs, schema at /openapi.json
 ```
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/health` | 200 with model and device info when the model is loaded, 503 otherwise |
-| GET | `/v1/models` | OpenAI model list (one model: `clause-classifier-qwen3-0.6b`) |
-| GET | `/v1/models/{id}` | one model |
-| POST | `/v1/chat/completions` | classify the last user message; reply content is the predictions JSON |
+| GET | `/health` | 200 when the latest model is loaded (with all available versions), 503 otherwise |
+| GET | `/v1/models` | every trained version, newest first; `is_latest` marks the default |
+| GET | `/v1/models/{id}` | one version (`latest` and base names resolve too) |
+| POST | `/v1/chat/completions` | classify the last user message with the latest model, or the one named in `model` |
 | GET | `/v1/dataset` | LEDGAR rows, 10 per page by default: `?split=train&offset=0&limit=10` (limit max 100) |
-| GET | `/v1/labels` | the 100 clause types |
+| GET | `/v1/labels` | the 72 clause types |
+| GET | `/playground` | browser playground (`/` redirects here) |
 
 ### Endpoints with sample requests and responses
 
@@ -327,60 +448,81 @@ make serve                       # http://localhost:8000, Swagger UI at /docs, s
 curl -s localhost:8000/health
 ```
 
-`200` when the model is loaded:
+`200` when the latest model is loaded:
 
 ```json
 {
   "status": "ok",
   "model_loaded": true,
-  "model": "clause-classifier-qwen3-0.6b",
-  "model_dir": "artifacts/best",
+  "model": "ledgar-qwen3-0.6b-v2",
+  "latest_model": "ledgar-qwen3-0.6b-v2",
+  "latest_version": 2,
+  "available_models": ["ledgar-qwen3-0.6b-v1", "ledgar-qwen3-0.6b-v2"],
+  "loaded_models": ["ledgar-qwen3-0.6b-v2"],
+  "models_dir": "contract-clause-classifier/artifacts/runs",
   "device": "mps",
-  "num_labels": 100,
-  "uptime_s": 3.304,
+  "num_labels": 72,
+  "uptime_s": 2.253,
   "version": "0.1.0",
   "detail": null
 }
 ```
 
-`503` while the model is missing or still loading (the dataset endpoints keep working):
+`503` before any model is trained (the dataset endpoints and the playground keep working):
 
 ```json
 {
   "status": "unavailable",
   "model_loaded": false,
-  "model": "clause-classifier-qwen3-0.6b",
-  "model_dir": "artifacts/best",
+  "model": null,
+  "latest_model": null,
+  "latest_version": null,
+  "available_models": [],
+  "loaded_models": [],
+  "models_dir": "contract-clause-classifier/artifacts/runs",
   "device": null,
   "num_labels": null,
   "uptime_s": 2.146,
   "version": "0.1.0",
-  "detail": "No trained model at artifacts/best (run scripts/02_train.py first)"
+  "detail": "No trained models in contract-clause-classifier/artifacts/runs. Train one with `make all`."
 }
 ```
+
+The latest model is loaded at startup; other versions load on first use and up to `MAX_LOADED_MODELS` (default 2) stay in memory. A version trained while the server runs is picked up within a few seconds, no restart needed.
 
 #### `GET /v1/models` and `GET /v1/models/{id}`
 
 ```bash
 curl -s localhost:8000/v1/models
-curl -s localhost:8000/v1/models/clause-classifier-qwen3-0.6b
+curl -s localhost:8000/v1/models/latest
+curl -s localhost:8000/v1/models/ledgar-qwen3-0.6b-v1
 ```
 
 ```json
 {
   "object": "list",
   "data": [
-    {"id": "clause-classifier-qwen3-0.6b", "object": "model", "created": 1791666222, "owned_by": "local"}
+    {
+      "id": "ledgar-qwen3-0.6b-v2", "object": "model", "created": 1791850000, "owned_by": "local",
+      "version": 2, "is_latest": true, "base_name": "ledgar-qwen3-0.6b", "base_model": "Qwen/Qwen3-0.6B-Base",
+      "loaded": true,
+      "metrics": {"best_val_accuracy": 0.95, "best_val_macro_f1": 0.91, "test_accuracy": 0.94, "test_top3_accuracy": 0.98, "test_macro_f1": 0.9}
+    },
+    {
+      "id": "ledgar-qwen3-0.6b-v1", "object": "model", "created": 1791660000, "owned_by": "local",
+      "version": 1, "is_latest": false, "base_name": "ledgar-qwen3-0.6b", "base_model": "Qwen/Qwen3-0.6B-Base",
+      "loaded": false, "metrics": {"best_val_accuracy": 0.93, "best_val_macro_f1": 0.89}
+    }
   ]
 }
 ```
 
-An unknown id returns `404` in the OpenAI error format:
+The `metrics` values above are illustrative; yours come from your runs. The non-standard fields (`version`, `is_latest`, …) are ignored by OpenAI clients. An unknown id returns `404` in the OpenAI error format and lists what is available:
 
 ```json
 {
   "error": {
-    "message": "The model 'gpt-4o' does not exist",
+    "message": "The model 'ledgar-qwen3-0.6b-v9' does not exist. Available: ledgar-qwen3-0.6b-v1, ledgar-qwen3-0.6b-v2 (or use 'latest', 'clause-classifier-qwen3-0.6b' for the latest).",
     "type": "not_found_error",
     "param": "model",
     "code": "model_not_found"
@@ -390,9 +532,25 @@ An unknown id returns `404` in the OpenAI error format:
 
 #### `POST /v1/chat/completions` (classify a clause or a whole contract)
 
+Which model answers:
+
+| `model` in the request | Model used |
+|---|---|
+| omitted, `""`, `"latest"` or `"clause-classifier-qwen3-0.6b"` (the `MODEL_ID` alias) | the latest version |
+| a version id, e.g. `"ledgar-qwen3-0.6b-v1"` | that version |
+| a base name, e.g. `"ledgar-qwen3-0.6b"` | the latest version of that series |
+| anything else | `404` listing the available versions |
+
+The response's `model` field always names the version that actually answered.
+
 ```bash
 curl -s localhost:8000/v1/chat/completions -H "Content-Type: application/json" -d '{
-  "model": "clause-classifier-qwen3-0.6b",
+  "messages": [{"role": "user", "content": "This Agreement shall be governed by the laws of New York."}]
+}'
+
+# a specific version
+curl -s localhost:8000/v1/chat/completions -H "Content-Type: application/json" -d '{
+  "model": "ledgar-qwen3-0.6b-v1",
   "messages": [{"role": "user", "content": "This Agreement shall be governed by the laws of New York."}]
 }'
 ```
@@ -404,7 +562,7 @@ A standard `chat.completion` object. The predictions are the JSON string in `cho
   "id": "chatcmpl-5f0b4683344349f48f47d5b4",
   "object": "chat.completion",
   "created": 1791666511,
-  "model": "clause-classifier-qwen3-0.6b",
+  "model": "ledgar-qwen3-0.6b-v2",
   "choices": [
     {
       "index": 0,
@@ -418,7 +576,7 @@ A standard `chat.completion` object. The predictions are the JSON string in `cho
     }
   ],
   "usage": {"prompt_tokens": 12, "completion_tokens": 82, "total_tokens": 94},
-  "system_fingerprint": "fp_ledgar-qwen3-0.6b-lora"
+  "system_fingerprint": "fp_ledgar-qwen3-0.6b-v2"
 }
 ```
 
@@ -426,7 +584,7 @@ Send a whole contract the same way (here the 13-section `demo/sample_contract.tx
 
 ```bash
 curl -s localhost:8000/v1/chat/completions -H "Content-Type: application/json" -d "$(python3 -c '
-import json; print(json.dumps({"model": "clause-classifier-qwen3-0.6b", "top_k": 2, "threshold": 0.2,
+import json; print(json.dumps({"model": "latest", "top_k": 2, "threshold": 0.2,
   "messages": [{"role": "user", "content": open("demo/sample_contract.txt").read()}]}))')" \
   | python3 -c "import sys, json; print(json.loads(sys.stdin.read())['choices'][0]['message']['content'])"
 ```
@@ -468,7 +626,7 @@ Unsupported options return `400`:
 }
 ```
 
-And without a loaded model the endpoint returns `503` with code `model_not_loaded`.
+And before any model is trained the endpoint returns `503` with code `model_not_loaded`.
 
 #### `GET /v1/dataset` (browse the training data, 10 rows per page)
 
@@ -487,20 +645,22 @@ curl -s "localhost:8000/v1/dataset?split=train&offset=0&limit=2"
     {
       "id": "train-0",
       "text": "Except as otherwise set forth in this Debenture, the Company, for itself and its legal representatives, successors and assigns, expressly waives presentment, protest, demand, notice of dishonor, notice of nonpayment, notice of maturity, notice of protest, presentment for the purpose of accelerating maturity, and diligence in collection.",
-      "label_id": 97,
-      "label": "Waivers"
+      "label_id": 72,
+      "label": "Waivers",
+      "original_label": "Waivers"
     },
     {
       "id": "train-1",
       "text": "No ERISA Event has occurred or is reasonably expected to occur that, when taken together with all other such ERISA Events ... nor otherwise has any liability under Title IV of ERISA.",
-      "label_id": 39,
-      "label": "Erisa"
+      "label_id": 38,
+      "label": "Erisa",
+      "original_label": "Erisa"
     }
   ]
 }
 ```
 
-`split` is `train`, `validation` or `test`; `offset` defaults to 0 and `limit` to 10 (maximum 100). Page through with `next_offset` until it is `null`. A bad split returns `422`:
+`label` is the clause type the model is trained on and `original_label` is LEDGAR's heading (they differ for merged labels, for example `Governing Laws` / `Applicable Laws`). `split` is `train`, `validation` or `test`; `offset` defaults to 0 and `limit` to 10 (maximum 100). Page through with `next_offset` until it is `null`. A bad split returns `422`:
 
 ```json
 {
@@ -522,8 +682,8 @@ curl -s localhost:8000/v1/labels
 ```json
 {
   "object": "list",
-  "total": 100,
-  "data": ["Adjustments", "Agreements", "Amendments", "Anti-Corruption Laws", "Applicable Laws", "Approvals", "..."]
+  "total": 72,
+  "data": ["Adjustments", "Agreements", "Amendments", "Sanctions and Anti-Corruption Laws", "Governing Laws", "Consents and Approvals", "..."]
 }
 ```
 
@@ -535,25 +695,28 @@ from openai import OpenAI
 
 client = OpenAI(base_url="http://localhost:8000/v1", api_key="unused")   # or your API_KEY
 resp = client.chat.completions.create(
-    model="clause-classifier-qwen3-0.6b",
+    model="latest",                                   # or a version such as "ledgar-qwen3-0.6b-v1"
     messages=[{"role": "user", "content": open("demo/sample_contract.txt").read()}],
     extra_body={"top_k": 3, "threshold": 0.3},       # optional, non-OpenAI knobs
 )
 result = json.loads(resp.choices[0].message.content)
+print(resp.model)                # the version that answered, e.g. "ledgar-qwen3-0.6b-v2"
 print(resp.usage)                # CompletionUsage(prompt_tokens=658, completion_tokens=1011, total_tokens=1669)
+print([m.id for m in client.models.list().data])   # all versions, newest first
 print(result["document"])        # [{"name": "Governing Laws", "confidence": 0.5642}, ...]
 ```
 
 Request details:
 
 * The contract is the **last `user` message** (string or `[{"type": "text", "text": ...}]` parts). System messages are ignored.
-* Optional extras: `top_k` (1 to 100), `threshold` (0 to 1), `segment` (force segmentation on or off; by default inputs over 350 words are segmented).
+* `model`: see the table above; omit it for the latest version.
+* Optional extras: `top_k` (1 to 100), `threshold` (0 to 1), `segment` (default `true`: split into provisions; `false` classifies the whole input as one clause).
 * `stream: true` and `n > 1` return a 400 error. Unknown OpenAI parameters are accepted and ignored.
 * `usage` reports real token counts.
 * Errors use the OpenAI envelope: `{"error": {"message", "type", "param", "code"}}`.
 * Set `API_KEY` to require `Authorization: Bearer <key>` on `/v1/*`. `/health` stays open.
 
-Environment variables (see `.env.example`): `MODEL_DIR`, `MODEL_ID`, `DATA_DIR`, `DEVICE`, `TOP_K`, `THRESHOLD`, `BATCH_SIZE`, `API_KEY`, `CORS_ORIGINS`, `MAX_INPUT_CHARS`.
+Environment variables (see `.env.example`): `RUNS_DIR` (where versions live), `MODEL_ID` (alias for the latest), `MAX_LOADED_MODELS`, `MODEL_RESCAN_SECONDS`, `LABEL_GROUPS`, `MODEL_DIR` (optional extra model folder), `DATA_DIR`, `DEVICE`, `TOP_K`, `THRESHOLD`, `BATCH_SIZE`, `API_KEY`, `CORS_ORIGINS`, `MAX_INPUT_CHARS`.
 
 ---
 
@@ -569,14 +732,14 @@ make docker-down
 
 * Docker on macOS cannot use the Apple GPU, so the container runs on CPU (fine for classification). For GPU speed on a Mac, use `make serve` natively.
 * The image is about 1.9 GB (CPU-only torch). It runs as a non-root user and has a `HEALTHCHECK` on `/health`.
-* `artifacts/best` is a relative symlink, which is why the whole `artifacts/` folder is mounted.
+* The container serves every version under `/app/artifacts/runs` (default: latest) plus the playground, and picks up newly trained versions without a restart.
 * **Colima users:** Colima only shares folders listed under `mounts:` in `~/.colima/default/colima.yaml`. If the project is not under a shared folder, the mounts arrive empty and `/health` reports "No trained model". Add the project folder to `mounts:` and run `colima restart`, or copy the model into a container:
 
   ```bash
   docker create --name ccc -p 8000:8000 contract-clause-classifier:0.1.0
-  docker cp -L artifacts/best ccc:/app/artifacts/best
-  docker cp data/raw ccc:/app/data/raw
   docker start ccc
+  for d in artifacts/runs/*/merged; do v=$(basename "$(dirname "$d")"); docker exec ccc mkdir -p /app/artifacts/runs/$v; docker cp "$d" ccc:/app/artifacts/runs/$v/; done
+  docker cp data/raw ccc:/app/data/raw
   ```
 
 ---
@@ -587,12 +750,15 @@ make docker-down
 contract-clause-classifier/
 ├── Makefile                    one-word commands for every step (make help)
 ├── pyproject.toml / uv.lock    pinned dependencies (Python 3.12)
-├── configs/ledgar_qwen3_0.6b.yaml   all training settings
+├── configs/
+│   ├── ledgar_qwen3_0.6b.yaml  all training settings, incl. model_version
+│   └── ledgar_label_groups.yaml  synonym labels merged into 72 clause types
 ├── src/classification/
 │   ├── config.py               config dataclasses, device + precision resolution
 │   ├── data.py                 LEDGAR download, tokenisation cache, length-grouped batching, dataset API store
 │   ├── labels.py               label map I/O
-│   ├── model.py                build (LoRA) / load / merge-export the classifier
+│   ├── model.py                build (full or LoRA) / load / export the classifier
+│   ├── registry.py             model versions: naming, discovery, latest, bump
 │   ├── train.py                device-agnostic training loop, checkpoints, resume
 │   ├── telemetry.py            run recorder, probe snapshots, system monitor
 │   ├── dashboard.py            live terminal dashboard
@@ -600,19 +766,22 @@ contract-clause-classifier/
 │   ├── segment.py              contract -> provisions
 │   ├── io_utils.py             read txt / pdf / docx
 │   ├── predict.py              Predictor: provisions -> [{name, confidence}]
-│   └── api/                    FastAPI app, OpenAI schemas, routes (health, openai, dataset)
-├── scripts/                    01_prepare_data … 06_render_gif (numbered pipeline steps)
+│   └── api/                    FastAPI app, multi-version model store, OpenAI schemas, routes, playground page
+├── scripts/                    01_prepare_data … 06_render_gif, 07_models (versions)
 ├── tests/                      pytest suite (stub model; no download or GPU needed)
 ├── demo/                       sample contract, telemetry GIF and final frame
 ├── docs/TELEMETRY.md           telemetry file schema
 ├── plans/PLAN.md               approved design plan
 ├── Dockerfile, docker-compose.yml, .env.example
-├── AGENTS.md, CLAUDE.md, .cursor/rules/, .codex/   guidance for coding agents (AGENTS.md is canonical)
+├── AGENTS.md                   rules for all AI assistants (single source of truth)
+├── CLAUDE.md, .cursor/rules/   Claude Code and Cursor entry points (import / point to AGENTS.md)
+├── GEMINI.md, CONVENTIONS.md, .rules, .github/, .windsurf/, .clinerules/, .roo/, .continue/,
+│   .amazonq/, .junie/, .aider.conf.yml   generated rule files for other assistants (make rules); Codex reads AGENTS.md
 ├── MEMORY.md                   project decisions and gotchas (agent memory)
 ├── CHANGELOG.md, changelog.html   release notes (Markdown and a standalone HTML page)
 ├── LICENSE                     Apache-2.0
 ├── data/                       (git-ignored) raw parquet + tokenised cache
-└── artifacts/                  (git-ignored) runs/, best -> runs/<run>/merged
+└── artifacts/                  (git-ignored) runs/<run>-v<N>/ per version, best -> latest version
 ```
 
 ---
@@ -624,17 +793,22 @@ Everything lives in [configs/ledgar_qwen3_0.6b.yaml](configs/ledgar_qwen3_0.6b.y
 | Key | Default | Meaning |
 |---|---|---|
 | `model_name` | `Qwen/Qwen3-0.6B-Base` | any HF causal LM with a sequence-classification head |
-| `full_finetune` | `false` | train all weights instead of LoRA (use `train.lr: 2e-5`) |
+| `model_version` | `1` | version the next run produces; bumped automatically by `make all` |
+| `full_finetune` | `true` | train all weights; `false` = LoRA adapters only (use `train.lr: 2e-4`) |
 | `device` | `auto` | `auto` picks cuda, then mps, then cpu |
 | `precision` | `auto` | bf16 autocast on CUDA, fp32 on MPS and CPU |
 | `data.max_len` | `512` | tokens per provision (about 2% of LEDGAR is longer) |
-| `lora.r` / `lora.alpha` | `16` / `32` | LoRA rank and scale |
-| `train.epochs` | `2` | passes over the 60k training provisions |
+| `data.label_groups` | `configs/ledgar_label_groups.yaml` | merge synonym labels (100 to 72); `null` = original labels |
+| `lora.r` / `lora.alpha` | `64` / `128` | LoRA rank and scale (only when `full_finetune: false`) |
+| `train.run_name` | `ledgar-qwen3-0.6b` | base name; runs are saved as `<run_name>-v<model_version>` |
+| `train.epochs` | `3` | passes over the 60k training provisions (early stopping may end sooner) |
 | `train.batch_size` × `train.grad_accum` | `4 × 8` | effective batch 32 |
-| `train.lr` | `2e-4` | peak learning rate, 3% warm-up then cosine decay |
+| `train.lr` | `2e-5` | peak learning rate, 6% warm-up then cosine decay |
+| `train.label_smoothing` | `0.1` | soft targets for near-duplicate clause types |
+| `train.best_metric` | `accuracy` | `accuracy` or `macro_f1`: picks the best checkpoint and drives early stopping |
 | `train.eval_steps` | `500` | optimizer steps between evaluations |
 | `train.eval_limit` | `3000` | validation examples used during training (`null` for all 10k) |
-| `train.early_stopping_patience` | `4` | evaluations without macro-F1 improvement before stopping |
+| `train.early_stopping_patience` | `4` | evaluations without improvement before stopping |
 | `train.class_weighted_loss` | `false` | up-weight rare clause types |
 | `train.empty_cache_steps` | `25` | release cached accelerator memory |
 | `telemetry.*` | all on | what to record (see [docs/TELEMETRY.md](docs/TELEMETRY.md)) |
@@ -647,7 +821,7 @@ Everything lives in [configs/ledgar_qwen3_0.6b.yaml](configs/ledgar_qwen3_0.6b.y
 make test
 ```
 
-28 tests cover segmentation, data paging and batching, the prediction output format, every API route and error case, API-key auth, the OpenAPI schema, and compatibility with the official OpenAI Python SDK. They use a keyword-based stub model, so they run in seconds with no download or GPU.
+71 tests cover segmentation, label grouping, data paging and batching, model versioning (naming, never-overwrite, resume and restart, bumping, latest selection), multi-version serving and model selection, the dashboard fitting the terminal, the prediction output format, every API route and error case, the playground, API-key auth, the OpenAPI schema, compatibility with the official OpenAI Python SDK, and that every AI assistant's rules file matches `AGENTS.md`. They use a keyword-based stub model, so they run in seconds with no download or GPU.
 
 ---
 
@@ -655,7 +829,10 @@ make test
 
 | Symptom | Fix |
 |---|---|
-| `/health` returns 503 "No trained model" | Train first (`make train`), or set `MODEL_DIR` to a `merged/` folder. |
+| `/health` returns 503 "No trained models" | Train first (`make all`), or point `RUNS_DIR` at a folder of runs. |
+| Training stops with "exists but did not finish" | A previous run of this version was interrupted. `make resume` continues it; `make restart` discards it and starts over. |
+| A request gets 404 `model_not_found` | The model id is not a trained version. `make models` or `GET /v1/models` lists them; omit `model` for the latest. |
+| The dashboard leaves repeated copies in the terminal | Fixed: the panel now sizes itself to the window. Use a terminal at least 20 lines tall. |
 | Training is slow and the Mac feels sluggish | Memory pressure. Keep `batch_size: 4`, close heavy apps, check swap with `sysctl vm.swapusage`. |
 | Training was interrupted | `make resume` continues from `checkpoint-last/`. |
 | `MPS backend out of memory` | Lower `train.batch_size` to 2 and raise `grad_accum` to 16, or set `gradient_checkpointing: true`. |

@@ -1,0 +1,21 @@
+---
+description: Model versioning, accuracy and changelog rules (training, registry, evaluation, release notes)
+globs: ["src/classification/train.py", "src/classification/registry.py", "src/classification/model.py", "src/classification/data.py", "scripts/02_train.py", "scripts/03_evaluate.py", "scripts/07_models.py", "configs/**", "CHANGELOG.md", "changelog.html"]
+alwaysApply: false
+---
+
+The full rules are in AGENTS.md ("Model rules", "Changelog rules"). In short:
+
+Models
+- Training without --run-name creates <train.run_name>-v<model_version>; never put a -vN suffix in run_name.
+- A run with merged/config.json is final: only evaluation may write calibration.json, eval.json, model_info.json there.
+- Unfinished version: tell the owner to run `make resume` or `make restart`; do not delete it.
+- model_version is raised only by `scripts/07_models.py bump` after the version completed.
+- Requests without `model` resolve to the newest completed versioned model; `sanity` never becomes latest over a versioned model.
+- Accuracy numbers come from `make evaluate` or telemetry and name the split, label set (72 merged / 100 original) and top-1 vs top-3.
+- Changing label groups, base model, max_len or loss makes new versions non-comparable: record it in CHANGELOG.md and MEMORY.md.
+
+Changelog
+- Every user-visible change goes under [Unreleased] in CHANGELOG.md and changelog.html, same entries and order.
+- Group as Added / Changed / Fixed / Removed / Deprecated / Security; mark breaking changes "Breaking"; list exact dependency versions.
+- Releases: rename [Unreleased] to [X.Y.Z] - YYYY-MM-DD, bump the package version, add a new empty [Unreleased].

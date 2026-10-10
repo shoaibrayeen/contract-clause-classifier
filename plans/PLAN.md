@@ -181,3 +181,19 @@ Implemented as planned, with these changes made during the build (owner requests
 | `/v1/labels` | not in plan | added | lists the 100 clause types |
 
 Verified: 28 tests pass; sanity training learns (val acc 0.8% → 17.6% in 64 steps); resume works; merged export, evaluation/calibration, CLI on txt/pdf/docx, native API and the OpenAI SDK, and the Docker image (health, chat, HEALTHCHECK healthy) all work. Full training is left for the owner to run (`make all`).
+
+## Update (2026-10-11, later): versions, accuracy, playground, assistant rules
+
+Requested by the owner after the first full run (LoRA, 100 labels) plateaued around 83% at half an epoch:
+
+| Area | Change | Evidence / reason |
+|---|---|---|
+| Model versions | Every run is `<run_name>-v<model_version>`; bump after `make all`; never overwrite; API defaults to latest, `model` selects a version | owner request |
+| Labels | 100 LEDGAR labels merged into 72 clause types (`configs/ledgar_label_groups.yaml`) | 38% of errors were synonym labels; same checkpoint 83.0% -> 90.0% |
+| Training | Full fine-tune, lr 2e-5, 3 epochs, label smoothing 0.1, best by accuracy | full FT measured +17% time, 22.5 GB; expected +1-2 points |
+| Expected accuracy | about 94-96% top-1, 98%+ top-3 on 72 clause types | 99% top-1 is above what LEDGAR supports (SOTA ~88% on 100 labels) |
+| Dashboard | 10 rows, short paths, fits the terminal | owner report of repeated panels |
+| Playground | `/playground` page in the API | owner request |
+| Agent rules | Core rules + model, changelog, security, git, data, docs rules; generated files for 10 more assistants | owner request |
+
+Verified without touching the owner's run: 71 tests; versioned training v1 -> v2 -> guarded v3 -> restart on a tiny CPU model; evaluate, predict, GIF, model list; API and playground in the browser; Docker serving two versions with auto-discovery.

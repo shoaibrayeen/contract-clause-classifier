@@ -11,7 +11,7 @@ UV     ?= uv
 CAFFEINATE := $(shell command -v caffeinate >/dev/null 2>&1 && echo "caffeinate -i")
 
 .DEFAULT_GOAL := help
-.PHONY: help setup data train resume restart finish evaluate gif bump models next adopt sanity predict serve test \
+.PHONY: help setup data train resume restart finish evaluate gif bump models next adopt sanity predict serve test rules \
         docker-build docker-up docker-down all clean-runs
 
 help: ## Show this help
@@ -75,6 +75,9 @@ serve: ## API + playground on http://localhost:$(PORT)/playground (serves every 
 
 test: ## Run the test suite (no trained model needed)
 	$(UV) run pytest -q
+
+rules: ## Regenerate every AI assistant's rules file from AGENTS.md
+	$(UV) run python scripts/sync_agent_rules.py
 
 # ---------------------------------------------------------------- docker
 

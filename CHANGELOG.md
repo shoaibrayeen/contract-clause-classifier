@@ -1,10 +1,43 @@
 # Changelog
 
-All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/). A styled copy of this file is at [changelog.html](changelog.html).
+All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/). A styled copy of this file is at [changelog.html](changelog.html); the two are kept in sync (see the Changelog rules in AGENTS.md).
 
 ## [Unreleased]
 
-Nothing yet.
+Model versioning, accuracy-focused training defaults, a browser playground, and rules for every AI assistant.
+
+### Added
+
+- **Model versions.** Every training run creates `<train.run_name>-v<model_version>` (first: `ledgar-qwen3-0.6b-v1`) and no model is ever overwritten. `model_version` in `configs/ledgar_qwen3_0.6b.yaml` starts at 1 and `make all` raises it after the run, evaluation and GIF succeed. Unfinished versions are never replaced silently: `make resume` continues one, `make restart` discards and retrains it.
+- **Multi-version serving.** The API serves every trained version. Requests without `model` (or with `latest`) use the newest; a version id such as `ledgar-qwen3-0.6b-v1` selects that version; a base name selects its latest version. The response's `model` field names the version that answered. New versions appear without restarting the server; up to `MAX_LOADED_MODELS` (default 2) stay in memory.
+- **Playground** at `http://localhost:8000/playground` (`/` redirects there): paste text or load a sample, pick a version, adjust top-k and threshold, and see clause types with confidence bars and per-clause predictions.
+- **Label grouping** (`configs/ledgar_label_groups.yaml`, `data.label_groups`): 49 synonym LEDGAR labels merged into 21 clause types, so 100 labels become 72. On the first run's validation data this alone moves accuracy from 83.0% to 90.0% at the same checkpoint.
+- `scripts/07_models.py` and `make models`, `make next`, `make bump`, `make adopt RUN=...`, `make restart`, `make finish`, `make rules`.
+- `merged/model_info.json` per version (id, version, base model, method, label count, label groups, best validation and test scores), shown by `make models` and `/v1/models`.
+- Top-3 accuracy in training evaluations, the test report, `make models` and `/v1/models`.
+- `/v1/dataset` rows include `original_label` (LEDGAR's heading) next to `label` (the clause type the model predicts).
+- `MODEL=` on `make evaluate`, `make gif` and `make predict`; `--model` on `03_evaluate.py` and `04_predict.py`; `--run latest|<version>` and `--copy-to` on `06_render_gif.py`.
+- Training settings `train.label_smoothing` and `train.best_metric`.
+- Rules for all AI assistants: core-rules summary plus Model, Changelog, Security and privacy, Git, Data and Documentation rules in `AGENTS.md`; generated rule files for GitHub Copilot, Gemini, Windsurf, Cline, Roo Code, Continue, Amazon Q, JetBrains Junie, Zed and Aider (`make rules`), kept in sync by a test.
+- Tests: 71 in total (versioning, multi-version API, label grouping, dashboard fit, playground, rule-file sync).
+
+### Changed
+
+- **Breaking: default training is full fine-tuning** (all 596M weights, lr 2e-5, 6% warm-up, 3 epochs, label smoothing 0.1, best checkpoint by accuracy) on the 72 merged clause types. Measured about 17% slower than LoRA on an M4 Pro (22.5 GB), about 8 hours for 3 epochs. Set `full_finetune: false` for LoRA (now r=64).
+- **Breaking: models predict 72 clause types instead of 100.** Merged names such as `Representations and Warranties` replace their parts. Set `data.label_groups: null` for the original labels. Versions trained before and after this change are not comparable.
+- **Breaking: run base name is now `ledgar-qwen3-0.6b`** (was `ledgar-qwen3-0.6b-lora`); runs are saved as `ledgar-qwen3-0.6b-v<N>`.
+- **Breaking: API settings.** `RUNS_DIR` (default `artifacts/runs`) replaces `MODEL_DIR` as the model source; `MODEL_DIR` is now an optional extra folder. `MODEL_ID` (`clause-classifier-qwen3-0.6b`) is an alias for the latest version. `/health` adds `latest_model`, `latest_version`, `available_models`, `loaded_models` and renames `model_dir` to `models_dir`.
+- Input is split into provisions by default in the API, CLI and playground (`segment: false` treats it as one clause). Previously only inputs over 350 words were split.
+- `artifacts/best` always points at the latest version rather than the last run.
+- Live dashboard: 10 rows of current-batch clause types and validation history, a compact stats block, top-3 accuracy column, and project-relative paths (`contract-clause-classifier/artifacts/runs/...`).
+- Console and API output show project-relative paths instead of `/Users/...`.
+- Docker image serves all versions (`RUNS_DIR=/app/artifacts/runs`) and includes the label-group file.
+
+### Fixed
+
+- The live dashboard re-printed itself in short terminals (the panel was taller than the window). It now sizes itself to the terminal.
+- Short multi-section contracts were classified as a single clause.
+- Starting training from a checkpoint whose head had a different label count failed (`ignore_mismatched_sizes`).
 
 ## [0.1.0] - 2026-10-11
 
