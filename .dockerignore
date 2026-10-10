@@ -1,0 +1,15 @@
+.venv
+.git
+**/__pycache__
+**/*.pyc
+.pytest_cache
+data
+artifacts
+plans
+docs
+tests
+.claude
+.cursor
+*.md
+!README.md
+.env

@@ -1,0 +1,58 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Environments ---
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# --- Data (downloaded / generated; re-create with scripts/01_prepare_data.py) ---
+data/*
+!data/.gitkeep
+
+# --- Training outputs (checkpoints, merged models, metrics) ---
+artifacts/*
+!artifacts/.gitkeep
+
+# --- Model / tensor files anywhere ---
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.gguf
+*.onnx
+
+# --- Hugging Face cache if HF_HOME is pointed inside the repo ---
+.cache/
+hf_cache/
+
+# --- Notebooks ---
+.ipynb_checkpoints/
+
+# --- OS / editors ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/settings.json
+*.swp
+
+# --- Local agent state (shared agent docs like CLAUDE.md / AGENTS.md ARE committed) ---
+.claude/settings.local.json
+
+# --- Logs ---
+*.log
+logs/

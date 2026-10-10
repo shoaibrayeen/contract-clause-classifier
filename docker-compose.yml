@@ -1,0 +1,20 @@
+services:
+  api:
+    build: .
+    image: contract-clause-classifier:0.1.0
+    container_name: contract-clause-classifier
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MODEL_DIR: /app/artifacts/best
+      DATA_DIR: /app/data
+      DEVICE: cpu
+    volumes:
+      # artifacts/best is a relative symlink into artifacts/runs/<run>/merged, so mount the whole folder.
+      - ./artifacts:/app/artifacts:ro
+      # Raw LEDGAR parquet for /v1/dataset (downloaded on first request if missing).
+      - ./data:/app/data
+    restart: unless-stopped

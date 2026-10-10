@@ -1,0 +1,57 @@
+[project]
+name = "contract-clause-classifier"
+version = "0.1.0"
+description = "Contract clause-type classifier: fine-tune a ~0.6B LM (Qwen3-0.6B) on LEDGAR, serve via an OpenAI-compatible FastAPI."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+# Exact pins: the tested, stable combination. Upgrade deliberately (see CHANGELOG.md).
+# Runtime deps only (what the API / Docker image needs).
+dependencies = [
+    "torch==2.14.1",
+    "transformers==5.19.0",
+    "huggingface_hub==2.2.0",
+    "safetensors==0.8.0",
+    "numpy==2.5.3",
+    "pyarrow==26.0.0",
+    "pyyaml==6.0.3",
+    "typer==0.27.3",
+    "rich==15.0.0",
+    "fastapi==0.143.0",
+    "uvicorn[standard]==0.54.0",
+    "pydantic==2.14.0",
+    "pymupdf==1.28.2",
+    "python-docx==1.2.0",
+    "psutil==7.2.2",
+]
+
+[dependency-groups]
+# Training / evaluation only (not installed in the Docker image).
+train = [
+    "peft==0.21.2",
+    "accelerate==1.15.0",
+    "scikit-learn==1.9.1",
+]
+# Rendering telemetry into GIF / MP4 (scripts/06_render_gif.py).
+viz = [
+    "matplotlib==3.11.2",
+    "pillow==12.3.0",
+]
+dev = [
+    "pytest==9.1.1",
+    "httpx==0.28.1",
+    "openai==3.28.0",
+]
+
+[tool.uv]
+default-groups = ["train", "viz", "dev"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/classification"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]

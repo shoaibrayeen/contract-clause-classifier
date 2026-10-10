@@ -1,0 +1,53 @@
+# Fine-tune Qwen3-0.6B-Base as a 100-way LEDGAR clause classifier (LoRA + trainable score head).
+# Runs unchanged on CUDA, Apple MPS or CPU (device: auto -> cuda > mps > cpu).
+
+model_name: Qwen/Qwen3-0.6B-Base
+full_finetune: false        # true = train all weights (set train.lr to ~2e-5)
+device: auto
+precision: auto             # autocast dtype: auto (bf16 on cuda, fp32 on mps/cpu) | bf16 | fp16 | fp32
+
+data:
+  data_dir: data
+  dataset_repo: coastalcph/lex_glue
+  dataset_config: ledgar
+  dataset_revision: refs/convert/parquet
+  max_len: 512
+
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+train:
+  run_name: ledgar-qwen3-0.6b-lora
+  output_dir: artifacts/runs
+  epochs: 2                 # ~2 h/epoch on M4 Pro (MPS), ~15-25 min/epoch on a modern CUDA GPU
+  batch_size: 8
+  grad_accum: 4             # effective batch 32
+  lr: 2.0e-4
+  weight_decay: 0.01
+  warmup_ratio: 0.03
+  max_grad_norm: 1.0
+  eval_steps: 500           # optimizer steps between validation runs
+  eval_limit: 3000          # fixed random subset of validation used for in-training evals (null = all 10k)
+  eval_batch_size: 32
+  early_stopping_patience: 4
+  log_steps: 10
+  seed: 42
+  class_weighted_loss: false
+  gradient_checkpointing: false
+  limit: null               # e.g. 512 for a quick sanity run
+  num_workers: 0
+  empty_cache_steps: 25      # free cached accelerator memory every N steps (keeps MPS from swapping)
+
+telemetry:
+  enabled: true
+  record_batches: true      # example ids / labels / lengths / per-example loss for every step
+  layer_stats_every: 10     # per-layer gradient norms every N steps
+  probe_per_label: 5        # fixed validation probe set (~500 examples) snapshotted at every eval
+  embeddings: true          # pooled final-layer vectors of the probe set
+  layer_probe_per_label: 1  # probes with vectors at every layer ("node" data, ~100 examples)
+  system_interval_s: 5      # CPU / RAM / accelerator memory sampling period
+  live_dashboard: true      # rich live panel in the terminal
