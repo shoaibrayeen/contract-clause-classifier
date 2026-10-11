@@ -60,7 +60,8 @@ make sanity                               # 5-min training smoke test (run name 
 make all / train / resume / restart       # full training (hours) - only when the user asks
 make models / make next                   # list versions / show the next version name
 make evaluate MODEL=latest                # calibrate + test metrics (any version id)
-make gif MODEL=latest                     # render a version's telemetry to GIF
+make gif MODEL=latest                     # render a version's telemetry charts to GIF
+make terminal-gif MODEL=latest            # replay a version's terminal dashboard epoch by epoch as GIF
 make serve                                # API + playground on :8000 (/playground)
 make playground-gif                       # re-record demo/playground_usage.gif (needs Chrome + a trained model)
 uv run python scripts/04_predict.py --text "..."   # one-off prediction

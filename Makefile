@@ -11,7 +11,7 @@ UV     ?= uv
 CAFFEINATE := $(shell command -v caffeinate >/dev/null 2>&1 && echo "caffeinate -i")
 
 .DEFAULT_GOAL := help
-.PHONY: help setup data train resume restart finish evaluate gif bump models next adopt sanity predict serve playground-gif test rules \
+.PHONY: help setup data train resume restart finish evaluate gif terminal-gif bump models next adopt sanity predict serve playground-gif test rules \
         docker-build docker-up docker-down all clean-runs
 
 help: ## Show this help
@@ -31,13 +31,16 @@ data: ## Step 1: download LEDGAR and tokenize (idempotent)
 train: ## Step 2: train the next model version with live dashboard + telemetry (keeps the Mac awake)
 	$(CAFFEINATE) $(UV) run python scripts/02_train.py --config $(CONFIG)
 
-finish: evaluate gif bump ## Steps 3-5 for the newest model: evaluate + calibrate, GIF, bump model_version
+finish: evaluate gif terminal-gif bump ## Steps 3-5 for the newest model: evaluate + calibrate, GIFs, bump model_version
 
 evaluate: ## Step 3: calibrate on validation + full test report (MODEL=latest or a version id)
 	$(UV) run python scripts/03_evaluate.py --config $(CONFIG) --model $(MODEL)
 
 gif: ## Step 4: render a model's telemetry to a GIF and copy it to demo/ (MODEL=latest or a version id)
 	$(UV) run python scripts/06_render_gif.py --run $(MODEL) --copy-to demo
+
+terminal-gif: ## Step 4b: replay the training dashboard epoch by epoch as demo/<run>_terminal.gif (MODEL=latest)
+	$(UV) run python scripts/09_render_terminal_gif.py --run $(MODEL)
 
 bump: ## Step 5: raise model_version in the config after the current version completed
 	$(UV) run python scripts/07_models.py bump --config $(CONFIG)

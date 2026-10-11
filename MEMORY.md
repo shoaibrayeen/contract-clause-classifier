@@ -73,6 +73,8 @@ Project memory: decisions, measurements and gotchas that are not obvious from th
 
 ## Gotchas
 
+- Terminal replay GIFs (`scripts/09_render_terminal_gif.py`) feed telemetry back into `TrainingDashboard`, which now takes an optional `get_time` so rich's elapsed/ETA columns follow the recorded timestamps. Frames are drawn cell by cell with Menlo (regular + bold faces of Menlo.ttc) on the rich MONOKAI theme; 48-colour palette, 1000 px, 60 frames + epoch holds keeps the v1 GIF at 3.1 MB (110 frames at 96 colours was 5.9 MB). (2026-10-11)
+
 - Recording the playground: `scripts/08_record_playground.py` drives headless Chrome through the DevTools protocol with the `websockets` package that uvicorn[standard] already installs (17.2, locked), and Pillow; no new dependency. A full recording takes ~10 s. The v1 session labels the sample's IP-infringement indemnity as Intellectual Property at 0.65 (wording-driven); kept in the GIF and noted in the README rather than hidden. (2026-10-11)
 
 - **LEDGAR's 100 labels lack common commercial clause types:** Limitation of Liability, Force Majeure, Non-Compete, Non-Solicitation, Audit Rights, Exclusivity, Most Favored Nation, Warranty Disclaimer, Liquidated Damages (also Services, Delivery, Price). The model maps them to the nearest known type; on demo/sample_contract.txt a Limitation of Liability section came back as Indemnifications at 0.72, a services clause as Payments at 0.20 and the preamble as Releases at 0.51. Documented in the README; covering them needs new labelled data. (2026-10-11)

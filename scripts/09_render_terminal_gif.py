@@ -169,7 +169,7 @@ def build_frames(run_dir: Path, n_frames: int, fps: int, renderer: TerminalRende
     sys_times = [s["time"] for s in system]
 
     # frame schedule: dense at the start (fast loss drop), even afterwards, plus every epoch boundary
-    targets = set(range(1, min(last, 200) + 1, 10))
+    targets = set(range(1, min(last, 200) + 1, 25))
     targets |= {round(x) for x in [i * last / n_frames for i in range(1, n_frames + 1)]}
     boundaries = {e * steps_per_epoch for e in range(1, epochs + 1) if e * steps_per_epoch <= last}
     targets |= boundaries | {last}
@@ -216,7 +216,7 @@ def save_gif(frames: list[tuple[Image.Image, int]], out: Path, width: int) -> No
     for img, ms in frames:
         h = int(img.height * width / img.width)
         small = img.resize((width, h), Image.LANCZOS)
-        scaled.append((small.quantize(colors=96, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE), ms))
+        scaled.append((small.quantize(colors=48, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE), ms))
     scaled[0][0].save(out, save_all=True, append_images=[f for f, _ in scaled[1:]],
                       duration=[ms for _, ms in scaled], loop=0, optimize=True, disposal=1)
     frames[-1][0].save(out.with_name(out.stem + "_final_frame.png"))
@@ -225,9 +225,9 @@ def save_gif(frames: list[tuple[Image.Image, int]], out: Path, width: int) -> No
 @app.command()
 def main(
     run: str = typer.Option("latest", help="Run directory, model id (e.g. ledgar-qwen3-0.6b-v1) or 'latest'"),
-    frames: int = typer.Option(90, help="Evenly spaced frames across the run (epoch boundaries are always added)"),
-    fps: int = typer.Option(8, help="Playback speed for ordinary frames"),
-    width: int = typer.Option(1100, help="GIF width in pixels"),
+    frames: int = typer.Option(60, help="Evenly spaced frames across the run (epoch boundaries are always added)"),
+    fps: int = typer.Option(6, help="Playback speed for ordinary frames"),
+    width: int = typer.Option(1000, help="GIF width in pixels"),
     out: Optional[Path] = typer.Option(None, help="Output GIF (default demo/<run>_terminal.gif)"),
 ) -> None:
     run_dir = resolve_run(run, PROJECT_ROOT / "artifacts" / "runs")

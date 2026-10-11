@@ -234,7 +234,8 @@ make all
 make data       # 1. tokenize the LEDGAR data shipped in data/raw/ledgar (downloads only if missing)
 make train      # 2. train the next version, e.g. ledgar-qwen3-0.6b-v1; live dashboard + telemetry
 make evaluate   # 3. calibrate confidences on validation, report test metrics (latest model)
-make gif        # 4. render the latest model's telemetry to a GIF (also copied to demo/)
+make gif        # 4. render the latest model's telemetry charts to a GIF (also copied to demo/)
+make terminal-gif  # 4b. replay the terminal dashboard epoch by epoch as a GIF (demo/<version>_terminal.gif)
 make bump       # 5. raise model_version so the next run becomes -v2
 make predict    # classify demo/sample_contract.txt with the latest model
 make serve      # API + playground on http://localhost:8000/playground
@@ -306,6 +307,11 @@ uv run python scripts/02_train.py --device cpu --limit 2000          # force CPU
 ```
 
 ### What you see in the terminal
+
+![The v1 training dashboard replayed epoch by epoch](demo/ledgar-qwen3-0.6b-v1_terminal.gif)
+
+The GIF replays the live dashboard of the `ledgar-qwen3-0.6b-v1` run from its telemetry: all 5,625 steps compressed into about 20 seconds, pausing at the end of each of the 3 epochs with the latest validation accuracy in the caption. `make all` renders one for every new version (`demo/<version>_terminal.gif`); re-render any run with `make terminal-gif MODEL=<version>`. It needs only the telemetry folder, no GPU or browser.
+
 
 A live panel refreshes twice a second: progress and ETA, loss and smoothed loss with a trend sparkline, learning rate, gradient norm (and whether it was clipped), tokens per second, padding ratio, accelerator memory, CPU and RAM, the top 10 clause types in the current batch, and the last 10 validation results (accuracy, top-3 accuracy, macro-F1). Paths are shown relative to the project, for example `contract-clause-classifier/artifacts/runs/ledgar-qwen3-0.6b-v1`. The panel sizes itself to the terminal window so it redraws in place; in a short window it shows fewer table rows. If output is redirected to a file, it prints one plain log line every 10 steps instead.
 
@@ -790,9 +796,9 @@ contract-clause-classifier/
 │   ├── io_utils.py             read txt / pdf / docx
 │   ├── predict.py              Predictor: provisions -> [{name, confidence}]
 │   └── api/                    FastAPI app, multi-version model store, OpenAI schemas, routes, playground page
-├── scripts/                    01_prepare_data … 06_render_gif, 07_models (versions), 08_record_playground
+├── scripts/                    01_prepare_data … 06_render_gif, 07_models (versions), 08_record_playground, 09_render_terminal_gif
 ├── tests/                      pytest suite (stub model; no download or GPU needed)
-├── demo/                       sample contract, training GIFs, playground usage GIF
+├── demo/                       sample contract, training chart GIFs, terminal replay GIFs, playground usage GIF
 ├── docs/TELEMETRY.md           telemetry file schema
 ├── plans/PLAN.md               approved design plan
 ├── Dockerfile, docker-compose.yml, .env.example
@@ -845,7 +851,7 @@ Everything lives in [configs/ledgar_qwen3_0.6b.yaml](configs/ledgar_qwen3_0.6b.y
 make test
 ```
 
-74 tests cover segmentation, label grouping, data paging and batching, model versioning (naming, never-overwrite, resume and restart, bumping, latest selection), multi-version serving and model selection, the dashboard fitting the terminal, the prediction output format, every API route and error case, the playground, API-key auth, the OpenAPI schema, compatibility with the official OpenAI Python SDK, and that every AI assistant's rules file matches `AGENTS.md`. They use a keyword-based stub model, so they run in seconds with no download or GPU.
+75 tests cover segmentation, label grouping, data paging and batching, model versioning (naming, never-overwrite, resume and restart, bumping, latest selection), multi-version serving and model selection, the dashboard fitting the terminal, the prediction output format, every API route and error case, the playground, API-key auth, the OpenAPI schema, compatibility with the official OpenAI Python SDK, and that every AI assistant's rules file matches `AGENTS.md`. They use a keyword-based stub model, so they run in seconds with no download or GPU.
 
 ---
 
