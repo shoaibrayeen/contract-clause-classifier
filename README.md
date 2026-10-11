@@ -2,52 +2,54 @@
 
 Fine-tune a ~0.6B language model (Qwen3-0.6B) to recognise **clause types in contracts**, then serve it through an **OpenAI-compatible FastAPI**.
 
-Give it a contract (text, PDF or DOCX). It splits the contract into provisions, classifies each one into one of **78 clause types** (LEDGAR's 100 labels with legal synonyms merged), and returns calibrated confidences:
+Give it a contract (text, PDF or DOCX). It splits the contract into provisions, classifies each one into one of **78 clause types** (LEDGAR's 100 labels with legal synonyms merged), and returns calibrated confidences in an OpenAI-style response ([format and real examples](#api-fastapi-openai-compatible)).
 
-```json
-{
-  "document": [
-    {"name": "Governing Laws", "confidence": 0.97},
-    {"name": "Confidentiality", "confidence": 0.94},
-    {"name": "Terminations", "confidence": 0.88}
-  ],
-  "clauses": [
-    {"index": 4, "text": "4. Confidentiality. Each party shall hold ...",
-     "predictions": [{"name": "Confidentiality", "confidence": 0.94}]}
-  ],
-  "num_clauses": 13
-}
-```
+The current model, **`ledgar-qwen3-0.6b-v1`**, scores **92.5% accuracy** and **97.7% top-3 accuracy** on the 10,000-provision LEDGAR test set.
 
 Training runs on **any machine** (Apple Silicon MPS, NVIDIA CUDA or CPU, auto-detected). While it trains, a **live dashboard** prints in the terminal and **every step is recorded** to disk so the run can be replayed as charts, a GIF or a video later. Every training run produces a new **model version** (`ledgar-qwen3-0.6b-v1`, `-v2`, …) and no model is ever overwritten. The API serves all versions, defaults to the latest, and includes a browser **playground**.
 
-![Training of ledgar-qwen3-0.6b-v1 rendered from its telemetry](demo/ledgar-qwen3-0.6b-v1_training.gif)
+## See it in action
+
+All three GIFs come from the real `ledgar-qwen3-0.6b-v1` model and its training run.
+
+**1. Model training.** Loss, validation accuracy, gradient flow through the layers, and clause types separating in the model's embeddings, rendered from the run's telemetry.
+
+![ledgar-qwen3-0.6b-v1 training: loss, validation accuracy, per-layer gradients and embedding clusters](demo/ledgar-qwen3-0.6b-v1_training.gif)
+
+**2. Playground.** Classifying a clause, then a whole contract, in the browser page served by the API.
+
+![Using the playground with ledgar-qwen3-0.6b-v1](demo/playground_usage.gif)
+
+**3. Terminal dashboard.** The live training dashboard replayed epoch by epoch: all 5,625 steps in about 20 seconds, pausing at the end of each epoch with the latest validation accuracy.
+
+![The ledgar-qwen3-0.6b-v1 training dashboard replayed epoch by epoch](demo/ledgar-qwen3-0.6b-v1_terminal.gif)
 
 ---
 
 ## Contents
 
-1. [How it works](#how-it-works)
-2. [Training data](#training-data)
-3. [Accuracy: what to expect](#accuracy-what-to-expect)
-4. [Requirements](#requirements)
-5. [Setup](#setup)
-6. [Run the full pipeline](#run-the-full-pipeline)
-7. [Model versions](#model-versions)
-8. [Training in detail](#training-in-detail)
-9. [Training telemetry and visualisation](#training-telemetry-and-visualisation)
-10. [Evaluation](#evaluation)
-11. [Predict from the command line](#predict-from-the-command-line)
-12. [Playground](#playground)
-13. [API (FastAPI, OpenAI-compatible)](#api-fastapi-openai-compatible)
-14. [Docker](#docker)
-15. [Project layout](#project-layout)
-16. [Configuration reference](#configuration-reference)
-17. [Testing](#testing)
-18. [Troubleshooting](#troubleshooting)
-19. [Pinned versions](#pinned-versions)
-20. [License](#license)
-21. [Author](#author)
+1. [See it in action](#see-it-in-action)
+2. [How it works](#how-it-works)
+3. [Training data](#training-data)
+4. [Accuracy: what to expect](#accuracy-what-to-expect)
+5. [Requirements](#requirements)
+6. [Setup](#setup)
+7. [Run the full pipeline](#run-the-full-pipeline)
+8. [Model versions](#model-versions)
+9. [Training in detail](#training-in-detail)
+10. [Training telemetry and visualisation](#training-telemetry-and-visualisation)
+11. [Evaluation](#evaluation)
+12. [Predict from the command line](#predict-from-the-command-line)
+13. [Playground](#playground)
+14. [API (FastAPI, OpenAI-compatible)](#api-fastapi-openai-compatible)
+15. [Docker](#docker)
+16. [Project layout](#project-layout)
+17. [Configuration reference](#configuration-reference)
+18. [Testing](#testing)
+19. [Troubleshooting](#troubleshooting)
+20. [Pinned versions](#pinned-versions)
+21. [License](#license)
+22. [Author](#author)
 ---
 
 ## How it works
@@ -308,9 +310,7 @@ uv run python scripts/02_train.py --device cpu --limit 2000          # force CPU
 
 ### What you see in the terminal
 
-![The v1 training dashboard replayed epoch by epoch](demo/ledgar-qwen3-0.6b-v1_terminal.gif)
-
-The GIF replays the live dashboard of the `ledgar-qwen3-0.6b-v1` run from its telemetry: all 5,625 steps compressed into about 20 seconds, pausing at the end of each of the 3 epochs with the latest validation accuracy in the caption. `make all` renders one for every new version (`demo/<version>_terminal.gif`); re-render any run with `make terminal-gif MODEL=<version>`. It needs only the telemetry folder, no GPU or browser.
+The [terminal dashboard GIF](#see-it-in-action) at the top replays the live dashboard of the `ledgar-qwen3-0.6b-v1` run from its telemetry: all 5,625 steps compressed into about 20 seconds, pausing at the end of each of the 3 epochs with the latest validation accuracy in the caption. `make all` renders one for every new version (`demo/<version>_terminal.gif`); re-render any run with `make terminal-gif MODEL=<version>`. It needs only the telemetry folder, no GPU or browser.
 
 
 A live panel refreshes twice a second: progress and ETA, loss and smoothed loss with a trend sparkline, learning rate, gradient norm (and whether it was clipped), tokens per second, padding ratio, accelerator memory, CPU and RAM, the top 10 clause types in the current batch, and the last 10 validation results (accuracy, top-3 accuracy, macro-F1). Paths are shown relative to the project, for example `contract-clause-classifier/artifacts/runs/ledgar-qwen3-0.6b-v1`. The panel sizes itself to the terminal window so it redraws in place; in a short window it shows fewer table rows. If output is redirected to a file, it prints one plain log line every 10 steps instead.
@@ -425,9 +425,7 @@ Sample output for the `--text` call:
 make serve          # then open http://localhost:8000/playground
 ```
 
-![Using the playground with ledgar-qwen3-0.6b-v1](demo/playground_usage.gif)
-
-A single page served by the API (no extra dependencies). Paste a clause or a whole contract, or load one of the samples, pick a model version (the latest is preselected), adjust top-k and the confidence threshold, and press **Classify** (or Ctrl/Cmd + Enter). It shows:
+A single page served by the API (see the [playground GIF](#see-it-in-action) at the top) (no extra dependencies). Paste a clause or a whole contract, or load one of the samples, pick a model version (the latest is preselected), adjust top-k and the confidence threshold, and press **Classify** (or Ctrl/Cmd + Enter). It shows:
 
 * **Clause types found**: every clause type detected in the input, with a confidence bar.
 * **Per clause**: each provision the input was split into, with its top predictions and confidences (below 50% shown in amber).
@@ -435,7 +433,7 @@ A single page served by the API (no extra dependencies). Paste a clause or a who
 
 The status pill shows the latest model and device. Before any model is trained it explains how to train one. If the server has an `API_KEY`, the page asks for it. `http://localhost:8000/` redirects to the playground.
 
-The GIF above is a real session with `ledgar-qwen3-0.6b-v1`. Re-record it after training a new version with:
+The playground GIF is a real session with `ledgar-qwen3-0.6b-v1`. Re-record it after training a new version with:
 
 ```bash
 make playground-gif        # drives headless Chrome through the playground -> demo/playground_usage.gif

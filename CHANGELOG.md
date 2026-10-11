@@ -43,6 +43,7 @@ Model versioning, accuracy-focused training defaults, a browser playground, and 
 ### Measured
 
 - **First fully trained model, `ledgar-qwen3-0.6b-v1`:** 92.46% accuracy, 97.69% top-3 accuracy and 89.7% macro-F1 on the full 10,000-row LEDGAR test split (78 clause types); calibration error 2.2% after temperature scaling (7.0% before). Validation accuracy plateaued at 92.2% from step 4,000 of 5,625.
+- README opens with a "See it in action" section showing the three real v1 GIFs (training charts, playground, terminal dashboard) in place of the illustrative output sample.
 - README sample responses now come from v1, and the README documents the commercial clause types LEDGAR does not cover (Limitation of Liability, Force Majeure, Non-Compete and others), which the model can only map to the nearest known type.
 
 ### Fixed
