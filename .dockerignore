@@ -6,7 +6,8 @@
 data/cache
 artifacts
 plans
-docs
+docs/*
+!docs/models
 tests
 .claude
 .cursor
@@ -23,4 +24,5 @@ tests
 *.md
 !README.md
 *.html
+!changelog.html
 .env

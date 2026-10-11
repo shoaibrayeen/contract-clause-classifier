@@ -20,7 +20,7 @@ from ..data import DatasetStore
 from ..predict import Predictor, load_predictor
 from .errors import install_error_handlers
 from .models import ModelStore, StaticModelStore
-from .routes import compare, dataset, health, openai, playground
+from .routes import compare, dataset, health, openai, pages, playground
 from .settings import Settings
 
 log = logging.getLogger("classification.api")
@@ -87,4 +87,5 @@ def create_app(settings: Settings | None = None, predictor: Predictor | None = N
     app.include_router(compare.router)
     app.include_router(dataset.router)
     app.include_router(playground.router)
+    app.include_router(pages.router)
     return app

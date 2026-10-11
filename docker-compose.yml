@@ -9,7 +9,8 @@ services:
       - path: .env
         required: false
     environment:
-      RUNS_DIR: /app/artifacts/runs          # every version is served; requests default to the latest
+      RUNS_DIR: /app/artifacts/runs          # every version is served; requests default to the latest transformer
+      CLASSICAL_RUNS_DIR: /app/artifacts/classical/runs   # classical models (POST /v1/compare, playground compare mode)
       DATA_DIR: /app/data
       DEVICE: cpu
     volumes:

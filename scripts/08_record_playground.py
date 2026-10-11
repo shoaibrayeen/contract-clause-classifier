@@ -185,9 +185,11 @@ async def record(url: str, chrome: str, rec: Recorder) -> None:
             await cdp.wait_for("document.readyState === 'complete' && !!document.getElementById('run')")
             await cdp.wait_for("document.getElementById('status').textContent.includes('Latest')")
             await cdp.wait_for("document.getElementById('model').options.length > 1")
-            model = await cdp.js("document.getElementById('model').options[1].value")
-
-            rec.add(await cdp.shot(), f"Open the playground: latest model {model} is loaded", 2200, step="1")
+            mode = await cdp.js("document.getElementById('model').value")
+            label = await cdp.js("document.getElementById('model').selectedOptions[0].textContent")
+            compare = mode == "__compare__"
+            rec.add(await cdp.shot(), ("Open the playground: compare mode runs both models" if compare
+                                       else f"Open the playground: {label}"), 2200, step="1")
 
             # --- scene 1: type a clause and classify it
             await cdp.js("document.getElementById('text').focus()")
@@ -202,7 +204,8 @@ async def record(url: str, chrome: str, rec: Recorder) -> None:
             await cdp.js("document.getElementById('run').click()")
             await cdp.wait_for("!!document.querySelector('#out .meta') && document.getElementById('run').textContent === 'Classify'")
             await asyncio.sleep(0.3)
-            rec.add(await cdp.shot(), "Clause type with a calibrated confidence", 3200, step="4")
+            rec.add(await cdp.shot(), ("Transformer and classical predictions, each with its confidence" if compare
+                                       else "Clause type with a calibrated confidence"), 3200, step="4")
 
             # --- scene 2: a whole contract
             sample_xy = await cdp.center('[data-sample="contract"]')
@@ -216,20 +219,24 @@ async def record(url: str, chrome: str, rec: Recorder) -> None:
             await cdp.wait_for("document.getElementById('run').textContent === 'Classify' && "
                                "document.querySelectorAll('#out .clause').length > 1")
             await asyncio.sleep(0.3)
-            rec.add(await cdp.shot(), "Every clause type found in the contract, with confidence", 3200, step="7")
+            rec.add(await cdp.shot(), ("Clause types found: blue = transformer, orange = classical" if compare
+                                       else "Every clause type found in the contract, with confidence"), 3200, step="7")
 
             # --- scroll through per-clause predictions
             total = await cdp.js("document.documentElement.scrollHeight - window.innerHeight")
             for y in range(0, int(total) + 1, max(60, int(total) // 10)):
                 await cdp.js(f"window.scrollTo(0, {y})")
                 await asyncio.sleep(0.05)
-                rec.add(await cdp.shot(), "Per clause: top predictions and confidence for each provision", 160, step="8")
+                rec.add(await cdp.shot(), ("Per clause: both models side by side, agree or differ" if compare
+                                           else "Per clause: top predictions and confidence for each provision"), 160, step="8")
             await cdp.js(f"window.scrollTo(0, {int(total)})")
             await asyncio.sleep(0.1)
-            rec.add(await cdp.shot(), "Per clause: top predictions and confidence for each provision", 3200, step="8")
+            rec.add(await cdp.shot(), ("Per clause: both models side by side, agree or differ" if compare
+                                       else "Per clause: top predictions and confidence for each provision"), 3200, step="8")
             await cdp.js("window.scrollTo(0, 0)")
             await asyncio.sleep(0.1)
-            rec.add(await cdp.shot(), f"Same results via the OpenAI-compatible API: POST /v1/chat/completions", 2600, step="9")
+            rec.add(await cdp.shot(), ("Same comparison via the API: POST /v1/compare" if compare
+                                       else "Same results via the OpenAI-compatible API: POST /v1/chat/completions"), 2600, step="9")
     finally:
         proc.terminate()
         try:

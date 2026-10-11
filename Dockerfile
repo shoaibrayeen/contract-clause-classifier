@@ -5,7 +5,8 @@
 #   docker build -t contract-clause-classifier .
 #   docker run -p 8000:8000 -v "$PWD/artifacts:/app/artifacts:ro" -v "$PWD/data:/app/data" contract-clause-classifier
 #
-# Serves every trained version under /app/artifacts/runs (default = latest) and the playground at /playground.
+# Serves every trained version under /app/artifacts/runs (default = latest transformer) and the classical models under
+# /app/artifacts/classical/runs, plus the playground at /playground and the model pages at /models/*.
 
 FROM python:3.12.15-slim-bookworm
 
@@ -15,6 +16,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     HF_HOME=/app/.cache/huggingface \
     RUNS_DIR=/app/artifacts/runs \
+    CLASSICAL_RUNS_DIR=/app/artifacts/classical/runs \
+    PAGES_DIR=/app/docs/models \
     LABEL_GROUPS=/app/configs/ledgar_label_groups.yaml \
     DATA_DIR=/app/data \
     DEVICE=cpu \
@@ -31,6 +34,9 @@ COPY src ./src
 COPY configs/ledgar_label_groups.yaml ./configs/ledgar_label_groups.yaml
 # Raw LEDGAR data (28 MB) so /v1/dataset works without a volume mount.
 COPY data/raw/ledgar ./data/raw/ledgar
+# Generated model pages (served at /models/*) and the changelog page.
+COPY docs/models ./docs/models
+COPY changelog.html ./changelog.html
 RUN pip install . && \
     useradd --create-home --uid 1000 app && \
     mkdir -p /app/artifacts /app/data /app/.cache && chown -R app:app /app

@@ -162,3 +162,22 @@ def test_models_and_health_show_families(compare_client):
     # chat completions without a model still use the transformer
     r = compare_client.post("/v1/chat/completions", json={"messages": [{"role": "user", "content": "Governed by NY law."}]})
     assert r.json()["model"] == "ledgar-qwen3-0.6b-v1"
+
+
+def test_model_pages_are_served(tiny_data, tmp_path):
+    pages = tmp_path / "docs" / "models"
+    (pages / "assets").mkdir(parents=True)
+    (pages / "compare.html").write_text("<h1>Transformer vs classical</h1>")
+    (pages / "assets" / "chart.png").write_bytes(b"\x89PNG fake")
+    (tmp_path / "changelog.html").write_text("<h1>Changelog</h1>")
+    store = StaticModelStore({"m": Predictor(StubBackend())})
+    with TestClient(create_app(Settings(pages_dir=str(pages)), model_store=store, dataset_store=DatasetStore(tiny_data))) as c:
+        assert "Transformer vs classical" in c.get("/models/compare").text
+        assert c.get("/models/compare.html").status_code == 200 and c.get("/models").status_code == 200
+        assert c.get("/models/assets/chart.png").content.startswith(b"\x89PNG")
+        assert c.get("/models/assets/..%2F..%2Fchangelog.html").status_code == 404     # no path escape
+        assert c.get("/models/assets/%2e%2e").status_code == 404
+        r = c.get("/models/transformer")
+        assert r.status_code == 404 and "make model-pages" in r.json()["error"]["message"]
+        assert c.get("/models/nope").status_code == 404
+        assert "Changelog" in c.get("/changelog.html").text

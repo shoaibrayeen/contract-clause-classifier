@@ -46,7 +46,7 @@ These are the rules every AI assistant must follow in this repository. The full 
 
 ## What this project is
 
-A contract clause-type classifier. Qwen3-0.6B-Base is fully fine-tuned with a classification head on LEDGAR (80k SEC contract provisions); LEDGAR's 100 labels are merged into 72 clause types (`configs/ledgar_label_groups.yaml`). Every training run produces a new model version (`<run_name>-v<N>`) and the API serves all versions, defaulting to the latest. A contract is split into provisions, each is classified, and the API returns `[{name, confidence}]` per provision and per document. Serving is an OpenAI-compatible FastAPI. Training records detailed telemetry for later visualisation.
+A contract clause-type classifier. Qwen3-0.6B-Base is fully fine-tuned with a classification head on LEDGAR (80k SEC contract provisions); LEDGAR's 100 labels are merged into 72 clause types (`configs/ledgar_label_groups.yaml`). Every training run produces a new model version (`<run_name>-v<N>`) and the API serves all versions, defaulting to the latest transformer. A second model family, a classical TF-IDF + logistic-regression classifier (`src/classification/classical/`, `configs/classical/`, `artifacts/classical/runs/`), is trained on the same data and served next to it; `POST /v1/compare` and the playground show both, and `docs/models/*.html` compare them. A contract is split into provisions, each is classified, and the API returns `[{name, confidence}]` per provision and per document. Serving is an OpenAI-compatible FastAPI. Training records detailed telemetry for later visualisation.
 
 Read before larger changes: [plans/PLAN.md](plans/PLAN.md) (design), [MEMORY.md](MEMORY.md) (decisions and gotchas), [docs/TELEMETRY.md](docs/TELEMETRY.md) (telemetry schema).
 
@@ -64,6 +64,9 @@ make gif MODEL=latest                     # render a version's telemetry charts 
 make terminal-gif MODEL=latest            # replay a version's terminal dashboard epoch by epoch as GIF
 make serve                                # API + playground on :8000 (/playground)
 make playground-gif                       # re-record demo/playground_usage.gif (needs Chrome + a trained model)
+make classical                            # train + evaluate the next classical version, rebuild model pages (CPU, ~30 min)
+make model-pages                          # regenerate docs/models/{compare,transformer,classical}.html
+make compare FILE=...                     # both models side by side on a file
 uv run python scripts/04_predict.py --text "..."   # one-off prediction
 ```
 
@@ -78,7 +81,10 @@ Always run Python through `uv run` (system Python is 3.9 and lacks the deps).
 | `src/classification/api/` | FastAPI app factory `create_app`, multi-version `ModelStore`, schemas, routes, `static/playground.html` |
 | `scripts/0N_*.py` | numbered pipeline steps; thin Typer CLIs over the package |
 | `configs/ledgar_qwen3_0.6b.yaml` | single source of training settings incl. `model_version`; mirrors dataclasses in `config.py` |
-| `configs/ledgar_label_groups.yaml` | synonym LEDGAR labels merged into 72 clause types |
+| `configs/ledgar_label_groups.yaml` | legal-synonym LEDGAR labels merged into 78 clause types |
+| `src/classification/classical/`, `configs/classical/`, `scripts/classical/` | classical model family (TF-IDF + logistic regression) |
+| `artifacts/classical/runs/<run>-v<N>/` | one folder per classical version (git-ignored) |
+| `docs/models/` | generated model pages (compare, transformer, classical) + chart assets |
 | `tests/` | pytest; `conftest.py` provides `StubBackend`, `predictor`, `tiny_data` fixtures |
 | `artifacts/runs/<run>-v<N>/` | one folder per model version (git-ignored); `merged/` is the served model; `artifacts/best` → latest |
 | `data/` | raw parquet + tokenised cache (git-ignored) |
@@ -113,7 +119,9 @@ How models are trained, named, kept and served. These protect the owner's traine
 7. **Accuracy claims need evidence.** Report accuracy only from `make evaluate` (full test split) or telemetry, and say which split, which label set (72 merged or 100 original) and whether it is top-1 or top-3. Do not promise accuracy the data cannot support; the evidence and ceiling are in README "Accuracy: what to expect" and MEMORY.md.
 8. **Changing what the model learns is a new model.** Changes to `data.label_groups`, the label set, `max_len`, the base model or the loss produce models that are not comparable with earlier versions: note them in the changelog and MEMORY.md, and in the README if user-facing.
 9. **Label groups need legal and statistical evidence.** Act as a legal analyst: merge only headings that denote the same legal concept, verified on sample rows, and that the data confuses (see the criterion in `configs/ledgar_label_groups.yaml`). Never merge to inflate accuracy. Record the reasoning and the numbers in the file header and MEMORY.md.
-10. **Never commit models or data.** `artifacts/` and `data/` stay git-ignored; share models by copying `merged/` folders.
+10. **Two model families, one default.** `model_info.json["family"]` is `transformer` or `classical`. Requests without `model` (and `latest`) must keep resolving to the latest transformer; `latest-classical` and exact ids select a classical model. Classical versions follow the same never-overwrite rules in `artifacts/classical/runs/` with their own `model_version` in `configs/classical/ledgar_tfidf_lr.yaml`. Both families must use the same label space to be compared.
+11. **Model pages are generated.** Never hand-edit `docs/models/*.html`; change `scripts/10_model_pages.py` and run `make model-pages`. Numbers on the pages come only from saved artifacts.
+12. **Never commit models or data.** `artifacts/` and `data/` stay git-ignored; share models by copying `merged/` folders.
 
 ## Changelog rules
 

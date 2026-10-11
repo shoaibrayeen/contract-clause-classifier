@@ -176,3 +176,25 @@ first, last = snaps[0], snaps[-1]
 gold_conf = [s["probs"][np.arange(len(s["labels"])), s["labels"]].astype(float) for s in snaps]
 print(meta["label_names"][:5], loss[-10:].mean(), [round(g.mean(), 3) for g in gold_conf])
 ```
+
+
+## Classical model runs
+
+Classical runs (`artifacts/classical/runs/<run>-v<N>/`, written by `scripts/classical/01_train.py` and
+`02_evaluate.py`) train in minutes, so instead of per-step records they store:
+
+| File | Content |
+|---|---|
+| `telemetry/meta.json` | run name, version, `family: "classical"`, config, label names and groups, dataset sizes, feature counts, environment, training seconds |
+| `telemetry/candidates.json` | one entry per trained candidate (logistic regression for each C, linear SVM for each C, the calibrated SVM, Complement Naive Bayes for each alpha): `family`, `params`, `fit_seconds`, `validation` and `train` metrics (`accuracy`, `top3_accuracy`, `macro_f1`, `log_loss` when the model gives probabilities), `selected: true` on the served model |
+| `telemetry/learning_curve.json` | the served configuration refitted on 10%, 25%, 50% and 100% of the training split: `fraction`, `train_examples`, `fit_seconds`, `validation` metrics |
+| `telemetry/events.jsonl` | `start`, `features`, `candidate`, `learning_curve`, `done` |
+| `telemetry/test_predictions.npz` | after evaluation: `probs` (N, K) float16 calibrated, `labels`, `pred` on the full test split |
+
+`merged/` holds `model.joblib` (the fitted scikit-learn pipeline), `labels.json`, `label_space.json`,
+`config.json`, `model_info.json` (with `family`, `classifier`, `features`, `train_seconds`, `model_size_mb`, and after
+evaluation `test` and `latency_ms_per_clause_cpu`), `top_features.json` (strongest word n-grams per clause type),
+`calibration.json` and `eval.json` (same schema as the transformer's).
+
+The comparison page caches the transformer's test-split probabilities in
+`artifacts/compare/<transformer-id>/test_predictions.npz` (the transformer's run folder is never written to).

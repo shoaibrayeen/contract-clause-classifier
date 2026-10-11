@@ -20,6 +20,8 @@ class Settings:
     model_dir: str | None = field(default_factory=lambda: os.environ.get("MODEL_DIR") or None)
     # Alias that always means "latest" (kept for clients written before versioning), besides "latest".
     model_id: str = field(default_factory=lambda: _env("MODEL_ID", "clause-classifier-qwen3-0.6b"))
+    # Generated model pages (scripts/10_model_pages.py), served at /models/*.
+    pages_dir: str = field(default_factory=lambda: _env("PAGES_DIR", "docs/models"))
     max_loaded_models: int = field(default_factory=lambda: int(_env("MAX_LOADED_MODELS", "2")))
     rescan_seconds: float = field(default_factory=lambda: float(_env("MODEL_RESCAN_SECONDS", "5")))
     data_dir: str = field(default_factory=lambda: _env("DATA_DIR", "data"))

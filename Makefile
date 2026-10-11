@@ -12,6 +12,7 @@ CAFFEINATE := $(shell command -v caffeinate >/dev/null 2>&1 && echo "caffeinate 
 
 .DEFAULT_GOAL := help
 .PHONY: help setup data train resume restart finish evaluate gif terminal-gif bump models next adopt sanity predict serve playground-gif test rules changelog-html \
+        classical all-classical classical-train classical-evaluate classical-bump model-pages compare \
         docker-build docker-up docker-down all clean-runs
 
 help: ## Show this help
@@ -22,8 +23,17 @@ setup: ## Install Python 3.12 + pinned dependencies into .venv
 
 # ---------------------------------------------------------------- pipeline
 
-all: data train finish ## Full pipeline: data -> train next version -> evaluate -> GIF -> bump version
+FAMILY ?= transformer
+
+ifeq ($(FAMILY),classical)
+all: classical ## Full pipeline. Transformer by default; `make all FAMILY=classical` runs the classical flow instead
 	@$(UV) run python scripts/07_models.py list --config $(CONFIG)
+else
+all: data train finish
+	@$(UV) run python scripts/07_models.py list --config $(CONFIG)
+endif
+
+all-classical: classical ## Same as `make classical`: train -> evaluate -> model pages -> bump the classical version
 
 data: ## Step 1: download LEDGAR and tokenize (idempotent)
 	$(UV) run python scripts/01_prepare_data.py --config $(CONFIG)
@@ -52,6 +62,27 @@ resume: ## Continue the unfinished current version, then evaluate, GIF and bump
 restart: ## Discard the unfinished current version, train it from scratch, then evaluate, GIF and bump
 	$(CAFFEINATE) $(UV) run python scripts/02_train.py --config $(CONFIG) --restart
 	$(MAKE) finish CONFIG=$(CONFIG)
+
+# ---------------------------------------------------------------- classical model (TF-IDF + logistic regression)
+
+CLASSICAL_CONFIG ?= configs/classical/ledgar_tfidf_lr.yaml
+
+classical: data classical-train classical-evaluate model-pages classical-bump ## Classical flow: data -> train -> evaluate -> model pages -> bump its version (CPU, ~30 min)
+
+classical-train: ## Train the next classical version -> artifacts/classical/runs/ledgar-tfidf-lr-v<N>
+	$(UV) run python scripts/classical/01_train.py --config $(CLASSICAL_CONFIG)
+
+classical-evaluate: ## Calibrate + full test report for the latest classical model
+	$(UV) run python scripts/classical/02_evaluate.py --config $(CLASSICAL_CONFIG)
+
+classical-bump: ## Raise model_version in the classical config after its current version completed
+	$(UV) run python scripts/07_models.py bump --config $(CLASSICAL_CONFIG)
+
+model-pages: ## Generate docs/models/{compare,transformer,classical}.html from the saved models
+	$(UV) run python scripts/10_model_pages.py
+
+compare: ## Both models side by side on a file: make compare FILE=contract.pdf
+	$(UV) run python scripts/11_compare.py $(or $(FILE),demo/sample_contract.txt)
 
 # ---------------------------------------------------------------- versions
 
