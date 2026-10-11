@@ -31,6 +31,7 @@ def health(request: Request):
         model=latest.id if latest else None,
         latest_model=latest.id if latest else None,
         latest_version=latest.version if latest else None,
+        latest_classical=(lambda c: c.id if c else None)(store.latest_of("classical")) if hasattr(store, "latest_of") else None,
         available_models=[m.id for m in models],
         loaded_models=list(loaded),
         models_dir=display_path(store.runs_dir),

@@ -129,15 +129,22 @@ class Predictor:
         probs = self.backend.predict_proba(texts)
         return [top_predictions(p, self.label_names, k, th) for p in probs]
 
+    def split(self, text: str, segment: bool = True) -> list[str]:
+        """The provisions a text is classified as (shared by every model in POST /v1/compare)."""
+        if segment:
+            return [p.text for p in segment_contract(text, self.min_words, self.max_words)]
+        return [text.strip()] if text.strip() else []
+
     def predict_document(self, text: str, top_k: int | None = None, threshold: float | None = None,
                          segment: bool = True) -> dict:
         """Classify each provision, then aggregate to document level (max confidence per label)."""
+        return self.predict_provisions_document(self.split(text, segment), top_k, threshold)
+
+    def predict_provisions_document(self, provisions: list[str], top_k: int | None = None,
+                                    threshold: float | None = None) -> dict:
+        """Same output as predict_document, for provisions that are already split."""
         k = top_k or self.top_k
         th = self.threshold if threshold is None else threshold
-        if segment:
-            provisions = [p.text for p in segment_contract(text, self.min_words, self.max_words)]
-        else:
-            provisions = [text.strip()] if text.strip() else []
         if not provisions:
             return {"document": [], "clauses": [], "num_clauses": 0}
         probs = self.backend.predict_proba(provisions)

@@ -14,7 +14,7 @@ classifiers = [
 ]
 requires-python = ">=3.12,<3.13"
 # Exact pins: the tested, stable combination. Upgrade deliberately (see CHANGELOG.md).
-# Runtime deps only (what the API / Docker image needs).
+# Runtime deps only (what the API / Docker image needs). scikit-learn + joblib serve the classical model.
 dependencies = [
     "torch==2.14.1",
     "transformers==5.19.0",
@@ -31,6 +31,8 @@ dependencies = [
     "pymupdf==1.28.2",
     "python-docx==1.2.0",
     "psutil==7.2.2",
+    "scikit-learn==1.9.1",
+    "joblib==1.6.0",
 ]
 
 [project.urls]
@@ -43,7 +45,6 @@ Changelog = "https://github.com/shoaibrayeen/contract-clause-classifier/blob/mas
 train = [
     "peft==0.21.2",
     "accelerate==1.15.0",
-    "scikit-learn==1.9.1",
 ]
 # Rendering telemetry into GIF / MP4 (scripts/06_render_gif.py).
 viz = [

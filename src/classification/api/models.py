@@ -34,8 +34,11 @@ class NoModelsError(ModelNotFoundError):
 
 class ModelStore:
     def __init__(self, runs_dir: str | Path, loader: Loader, aliases: Iterable[str] = ("latest",),
-                 max_loaded: int = 2, rescan_s: float = 5.0, extra_dirs: Iterable[str | Path] = ()):
+                 max_loaded: int = 2, rescan_s: float = 5.0, extra_dirs: Iterable[str | Path] = (),
+                 extra_runs_dirs: Iterable[str | Path] = ()):
         self.runs_dir = Path(runs_dir)
+        # Further run folders scanned like runs_dir (e.g. artifacts/classical/runs for the classical family).
+        self.extra_runs_dirs = [Path(p) for p in extra_runs_dirs]
         self.loader = loader
         self.aliases = tuple(a for a in aliases if a)
         self.max_loaded = max(1, max_loaded)
@@ -52,6 +55,8 @@ class ModelStore:
         with self._lock:
             if refresh or time.time() - self._scanned_at >= self.rescan_s:
                 found = list_models(self.runs_dir)
+                for d in self.extra_runs_dirs:
+                    found.extend(list_models(d))
                 seen = {m.path.resolve() for m in found}
                 for d in self.extra_dirs:  # e.g. MODEL_DIR pointing outside RUNS_DIR
                     run_dir = d.parent if d.name == "merged" else d
@@ -62,7 +67,11 @@ class ModelStore:
             return list(self._models)
 
     def latest(self) -> ModelInfo | None:
+        """Default model for requests without `model`: the newest transformer (any family if none exists)."""
         return latest_model(self.models())
+
+    def latest_of(self, family: str) -> ModelInfo | None:
+        return latest_model(self.models(), family=family, strict=True)
 
     def resolve(self, requested: str | None) -> ModelInfo:
         models = self.models()
@@ -113,7 +122,8 @@ class StaticModelStore(ModelStore):
     """Fixed, already-loaded predictors (tests, or embedding the API in another program)."""
 
     def __init__(self, predictors: dict[str, Predictor], latest: str | None = None,
-                 aliases: Iterable[str] = ("latest",), versions: dict[str, int | None] | None = None):
+                 aliases: Iterable[str] = ("latest",), versions: dict[str, int | None] | None = None,
+                 families: dict[str, str] | None = None):
         super().__init__(Path("."), loader=_no_loader, aliases=aliases, max_loaded=max(1, len(predictors)))
         from ..registry import split_name
 
@@ -128,7 +138,8 @@ class StaticModelStore(ModelStore):
             if versions and mid in versions:
                 version = versions[mid]
             self._models.append(ModelInfo(id=mid, run_dir=Path(mid), base_name=base, version=version,
-                                          created=now - (len(order) - i), info={}))
+                                          created=now - (len(order) - i), info={},
+                                          family=(families or {}).get(mid, "transformer")))
         self._loaded = OrderedDict((mid, predictors[mid]) for mid in order)
 
     def models(self, refresh: bool = False) -> list[ModelInfo]:

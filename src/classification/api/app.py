@@ -20,10 +20,24 @@ from ..data import DatasetStore
 from ..predict import Predictor, load_predictor
 from .errors import install_error_handlers
 from .models import ModelStore, StaticModelStore
-from .routes import dataset, health, openai, playground
+from .routes import compare, dataset, health, openai, playground
 from .settings import Settings
 
 log = logging.getLogger("classification.api")
+
+
+def _load_any(path, settings: Settings) -> Predictor:
+    """Load a merged model directory with the backend its family needs (transformer: HF, classical: sklearn)."""
+    import json
+
+    info_path = path / "model_info.json"
+    family = json.loads(info_path.read_text()).get("family", "transformer") if info_path.exists() else "transformer"
+    if family == "classical":
+        from ..classical.backend import SklearnBackend
+
+        return Predictor(SklearnBackend(path), top_k=settings.top_k, threshold=settings.threshold)
+    return load_predictor(path, device=settings.device, top_k=settings.top_k, threshold=settings.threshold,
+                          batch_size=settings.batch_size)
 
 
 def create_app(settings: Settings | None = None, predictor: Predictor | None = None,
@@ -36,10 +50,10 @@ def create_app(settings: Settings | None = None, predictor: Predictor | None = N
     if model_store is None:
         model_store = ModelStore(
             resolve_path(settings.runs_dir),
-            loader=lambda path: load_predictor(path, device=settings.device, top_k=settings.top_k,
-                                               threshold=settings.threshold, batch_size=settings.batch_size),
+            loader=lambda path: _load_any(path, settings),
             aliases=settings.aliases, max_loaded=settings.max_loaded_models, rescan_s=settings.rescan_seconds,
             extra_dirs=[resolve_path(settings.model_dir)] if settings.model_dir else [],
+            extra_runs_dirs=[resolve_path(settings.classical_runs_dir)] if settings.classical_runs_dir else [],
         )
 
     @asynccontextmanager
@@ -70,6 +84,7 @@ def create_app(settings: Settings | None = None, predictor: Predictor | None = N
     install_error_handlers(app)
     app.include_router(health.router)
     app.include_router(openai.router)
+    app.include_router(compare.router)
     app.include_router(dataset.router)
     app.include_router(playground.router)
     return app

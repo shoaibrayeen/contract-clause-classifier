@@ -66,6 +66,20 @@
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--accent-bg); color: var(--accent-strong); font-variant-numeric: tabular-nums; }
   .chip.low { background: var(--warn-bg); color: var(--warn); }
+  .chip.cls { background: #fdeee6; color: #8a3a12; }
+  .chip.cls.low { background: var(--warn-bg); color: var(--warn); }
+  .bar-fill.cls { background: #eb6834; }
+  .bar-pair { display: grid; grid-template-columns: minmax(120px, 36%) 1fr; gap: 10px; align-items: center; margin: 8px 0; font-size: 14px; }
+  .bar-stack { display: grid; gap: 3px; }
+  .bar-line { display: grid; grid-template-columns: 1fr 52px; gap: 8px; align-items: center; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .model-row { display: grid; grid-template-columns: 92px 1fr; gap: 8px; align-items: start; margin: 3px 0; font-size: 12px; color: var(--muted); }
+  .agree { font-size: 11px; padding: 2px 7px; border-radius: 999px; margin-left: 6px; vertical-align: 1px; }
+  .agree.yes { background: var(--ok-bg); color: var(--ok); }
+  .agree.no { background: var(--warn-bg); color: var(--warn); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chip.cls { background: #4a2310; color: #f5c4b3; } }
   .empty { color: var(--faint); font-size: 14px; padding: 24px 0; text-align: center; }
   details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
   pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; overflow: auto; font: 12px/1.45 var(--mono); max-height: 320px; }
@@ -82,6 +96,9 @@
     </div>
     <div class="row">
       <span id="status" class="pill" role="status"><span class="dot"></span>Checking model…</span>
+      <a class="pill" href="/models/compare">Compare models</a>
+      <a class="pill" href="/models/transformer">Transformer</a>
+      <a class="pill" href="/models/classical">Classical</a>
       <a class="pill" href="/docs">API docs</a>
     </div>
   </header>
@@ -202,10 +219,15 @@ async function loadModels() {
     const r = await fetch("/v1/models", { headers: headers() });
     if (r.status === 401) { $("keybox").hidden = false; return; }
     const data = (await r.json()).data || [];
-    sel.replaceChildren(el("option", { value: "latest" }, "latest" + (data.find(m => m.is_latest) ? ` (${data.find(m => m.is_latest).id})` : "")));
+    const tr = data.find(m => (m.family || "transformer") === "transformer");
+    const cl = data.find(m => m.family === "classical");
+    sel.replaceChildren();
+    if (tr && cl) sel.append(el("option", { value: "__compare__" }, `Compare: ${tr.id} + ${cl.id}`));
+    sel.append(el("option", { value: "latest" }, "latest transformer" + (data.find(m => m.is_latest) ? ` (${data.find(m => m.is_latest).id})` : "")));
+    if (cl) sel.append(el("option", { value: "latest-classical" }, `latest classical (${cl.id})`));
     for (const m of data) {
       const acc = m.metrics && m.metrics.test_accuracy != null ? ` · test acc ${pct(m.metrics.test_accuracy)}` : "";
-      sel.append(el("option", { value: m.id }, `${m.id}${m.is_latest ? " ★" : ""}${acc}`));
+      sel.append(el("option", { value: m.id }, `${m.id} [${m.family || "transformer"}]${m.is_latest ? " ★" : ""}${acc}`));
     }
   } catch (e) { /* keep "latest" */ }
 }
@@ -249,6 +271,58 @@ function render(result, resp, ms) {
   out.replaceChildren(meta, doc, clauses, raw);
 }
 
+const NAMES = { transformer: "Transformer", classical: "Classical" };
+
+function renderCompare(resp, ms) {
+  const out = $("out");
+  const [a, b] = resp.models;
+  const ag = resp.agreement;
+  const meta = el("div", { class: "meta" },
+    el("span", {}, "Clauses ", el("b", {}, resp.num_clauses)),
+    ...resp.models.map(m => el("span", {}, `${NAMES[m.family] || m.family} `, el("b", {}, `${m.latency_ms} ms`))),
+    ag ? el("span", {}, "Agreement ", el("b", {}, `${ag.clauses_agree}/${ag.clauses_total} (${pct(ag.rate)})`)) : "",
+    el("span", {}, "Round trip ", el("b", {}, `${ms} ms`)));
+  const legend = el("div", { class: "legend" },
+    ...resp.models.map((m, i) => el("span", {}, el("span", { class: "sw", style: `background:${i ? "#eb6834" : "var(--bar)"}` }), `${NAMES[m.family] || m.family}: ${m.id}`)));
+
+  const doc = el("div", {}, el("h2", {}, "Clause types found"), legend);
+  const names = [];
+  for (const m of resp.models) for (const d of m.document) if (!names.includes(d.name)) names.push(d.name);
+  const conf = (m, n) => (m.document.find(d => d.name === n) || {}).confidence || 0;
+  names.sort((x, y) => Math.max(...resp.models.map(m => conf(m, y))) - Math.max(...resp.models.map(m => conf(m, x))));
+  if (!names.length) doc.append(el("p", { class: "hint" }, "No clause type passed the confidence threshold."));
+  for (const n of names) {
+    const stack = el("div", { class: "bar-stack" });
+    resp.models.forEach((m, i) => {
+      const c = conf(m, n);
+      stack.append(el("div", { class: "bar-line" },
+        el("div", { class: "bar-track", role: "img", "aria-label": `${m.family} ${n} ${pct(c)}` },
+          el("div", { class: "bar-fill" + (i ? " cls" : ""), style: `width:${Math.max(c ? 2 : 0, c * 100)}%` })),
+        el("span", { class: "num" }, c ? pct(c) : "–")));
+    });
+    doc.append(el("div", { class: "bar-pair" }, el("span", {}, n), stack));
+  }
+
+  const clauses = el("div", { style: "margin-top:16px" }, el("h2", {}, "Per clause"));
+  a.clauses.forEach((c, idx) => {
+    const same = ag ? ag.per_clause[idx] : null;
+    const head = el("p", { class: "clause-text" }, `#${c.index + 1}  ${c.text}`);
+    if (same !== null) head.append(el("span", { class: "agree " + (same ? "yes" : "no") }, same ? "agree" : "differ"));
+    const box = el("div", { class: "clause" }, head);
+    resp.models.forEach((m, i) => {
+      const chips = el("div", { class: "chips" });
+      for (const p of m.clauses[idx].predictions) {
+        chips.append(el("span", { class: "chip" + (i ? " cls" : "") + (p.confidence < 0.5 ? " low" : "") }, `${p.name} · ${pct(p.confidence)}`));
+      }
+      box.append(el("div", { class: "model-row" }, el("span", {}, NAMES[m.family] || m.family), chips));
+    });
+    clauses.append(box);
+  });
+  const raw = el("details", { style: "margin-top:12px" }, el("summary", {}, "Raw API response (POST /v1/compare)"),
+    el("pre", {}, JSON.stringify(resp, null, 2)));
+  out.replaceChildren(meta, doc, clauses, raw);
+}
+
 async function classify() {
   clearError();
   const text = $("text").value;
@@ -264,6 +338,24 @@ async function classify() {
   };
   body.segment = seg === "on";
   const t0 = performance.now();
+  if (body.model === "__compare__") {
+    try {
+      const { model, ...rest } = body;
+      const r = await fetch("/v1/compare", { method: "POST", headers: headers(), body: JSON.stringify(rest) });
+      const resp = await r.json();
+      if (!r.ok) {
+        if (r.status === 401) $("keybox").hidden = false;
+        showError((resp.error && resp.error.message) || `Request failed (${r.status})`);
+        return;
+      }
+      renderCompare(resp, Math.round(performance.now() - t0));
+    } catch (e) {
+      showError("Could not reach the API: " + e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = "Classify";
+    }
+    return;
+  }
   try {
     const r = await fetch("/v1/chat/completions", { method: "POST", headers: headers(), body: JSON.stringify(body) });
     const resp = await r.json();

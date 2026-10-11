@@ -14,6 +14,8 @@ def _env(name: str, default: str) -> str:
 class Settings:
     # Every completed run under RUNS_DIR is servable; requests pick one by id (default: latest).
     runs_dir: str = field(default_factory=lambda: _env("RUNS_DIR", "artifacts/runs"))
+    # Classical (TF-IDF + linear) models, served next to the transformer and used by POST /v1/compare.
+    classical_runs_dir: str = field(default_factory=lambda: _env("CLASSICAL_RUNS_DIR", "artifacts/classical/runs"))
     # Optional extra model directory outside RUNS_DIR (e.g. a copied merged/ folder).
     model_dir: str | None = field(default_factory=lambda: os.environ.get("MODEL_DIR") or None)
     # Alias that always means "latest" (kept for clients written before versioning), besides "latest".

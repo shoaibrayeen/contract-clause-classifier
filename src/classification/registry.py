@@ -15,6 +15,10 @@ the latest model.
 
 "Latest" = the most recently created versioned model; unversioned runs (e.g. `sanity`, or runs
 named explicitly with --run-name) are only chosen when no versioned model exists.
+
+Model families: `model_info.json["family"]` is "transformer" (default, also for models written before
+families existed) or "classical" (TF-IDF + linear models, `artifacts/classical/runs/`). `latest` prefers the
+transformer family; `latest-classical` resolves to the newest classical model.
 """
 
 from __future__ import annotations
@@ -34,6 +38,8 @@ MODEL_INFO_FILE = "model_info.json"
 VERSION_RE = re.compile(r"^(?P<base>.+)-v(?P<version>\d+)$")
 CONFIG_VERSION_RE = re.compile(r"^(?P<key>model_version:[ \t]*)(?P<num>\d+)", re.MULTILINE)
 DEFAULT_ALIASES = ("latest",)
+CLASSICAL_ALIAS = "latest-classical"
+FAMILIES = ("transformer", "classical")
 
 
 class RegistryError(Exception):
@@ -56,6 +62,7 @@ class ModelInfo:
     version: int | None
     created: float
     info: dict[str, Any] = field(default_factory=dict)
+    family: str = "transformer"
 
     @property
     def path(self) -> Path:
@@ -69,7 +76,7 @@ class ModelInfo:
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id, "version": self.version, "base_name": self.base_name, "created": self.created,
-            "path": str(self.path), **{k: v for k, v in self.info.items() if k not in ("id", "version", "base_name")},
+            "family": self.family, "path": str(self.path), **{k: v for k, v in self.info.items() if k not in ("id", "version", "base_name")},
         }
 
 
@@ -121,7 +128,7 @@ def read_model_info(run_dir: Path) -> ModelInfo:
         version = info["version"]
     created = info.get("created") or (merged / "config.json").stat().st_mtime
     return ModelInfo(id=model_id, run_dir=run_dir, base_name=info.get("base_name", base), version=version,
-                     created=float(created), info=info)
+                     created=float(created), info=info, family=info.get("family", "transformer"))
 
 
 def list_models(runs_dir: str | Path) -> list[ModelInfo]:
@@ -136,8 +143,14 @@ def list_models(runs_dir: str | Path) -> list[ModelInfo]:
     return sorted(models, key=lambda m: (m.created, m.version or 0, m.id))
 
 
-def latest_model(models: list[ModelInfo], base: str | None = None) -> ModelInfo | None:
+def latest_model(models: list[ModelInfo], base: str | None = None, family: str | None = "transformer",
+                 strict: bool = False) -> ModelInfo | None:
+    """Newest model, preferring versioned runs. `family` is a preference (falls back to any family when none of
+    that family exists) unless `strict`; `family=None` ignores families; a `base` name ignores families."""
     pool = [m for m in models if base is None or m.base_name == base]
+    if family and base is None:
+        same = [m for m in pool if m.family == family]
+        pool = same if (same or strict) else pool
     versioned = [m for m in pool if m.versioned]
     pool = versioned or pool
     return max(pool, key=lambda m: (m.created, m.version or 0)) if pool else None
@@ -148,6 +161,11 @@ def resolve_model(models: list[ModelInfo], requested: str | None,
     """None / '' / an alias -> latest; exact id -> that model; base name -> latest version of that base."""
     if not models:
         raise ModelNotFoundError("No trained models found. Train one with `make all`.")
+    if requested == CLASSICAL_ALIAS:
+        found = latest_model(models, family="classical", strict=True)
+        if found is None:
+            raise ModelNotFoundError("No classical model is trained. Train one with `make classical`.")
+        return found
     if not requested or requested in aliases:
         return latest_model(models)  # type: ignore[return-value]
     for m in models:
@@ -158,7 +176,7 @@ def resolve_model(models: list[ModelInfo], requested: str | None,
         return by_base
     raise ModelNotFoundError(
         f"The model '{requested}' does not exist. Available: {', '.join(m.id for m in models)}"
-        f" (or use {', '.join(repr(a) for a in aliases)} for the latest)."
+        f" (or use {', '.join(repr(a) for a in aliases)} for the latest, {CLASSICAL_ALIAS!r} for the latest classical model)."
     )
 
 

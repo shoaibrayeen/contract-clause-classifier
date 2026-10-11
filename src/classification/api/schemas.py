@@ -88,6 +88,7 @@ class ModelCard(BaseModel):
     created: int
     owned_by: str = "local"
     version: int | None = None
+    family: str = "transformer"  # transformer | classical
     is_latest: bool = False
     base_name: str | None = None
     base_model: str | None = None
@@ -163,6 +164,7 @@ class Health(BaseModel):
     model: str | None
     latest_model: str | None = None
     latest_version: int | None = None
+    latest_classical: str | None = None
     available_models: list[str] = []
     loaded_models: list[str] = []
     models_dir: str
@@ -171,3 +173,44 @@ class Health(BaseModel):
     uptime_s: float
     version: str
     detail: str | None = None
+
+
+# --------------------------------------------------------------------------- compare (transformer vs classical)
+
+class CompareRequest(BaseModel):
+    """POST /v1/compare: run several models on the same provisions.
+
+    Give the text either as `text` or OpenAI-style `messages` (last user message). `models` defaults to the
+    latest transformer and the latest classical model.
+    """
+
+    model_config = ConfigDict(extra="allow")
+    text: str | None = None
+    messages: list[ChatMessage] | None = None
+    models: list[str] | None = Field(default=None, min_length=1, max_length=4)
+    top_k: int | None = Field(default=None, ge=1, le=100)
+    threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    segment: bool | None = None
+
+
+class CompareModelResult(BaseModel):
+    id: str
+    family: str
+    version: int | None = None
+    latency_ms: float
+    document: list[ClausePrediction]
+    clauses: list[ClauseResult]
+
+
+class CompareAgreement(BaseModel):
+    clauses_agree: int
+    clauses_total: int
+    rate: float | None
+    per_clause: list[bool]
+
+
+class CompareResponse(BaseModel):
+    object: Literal["clause.comparison"] = "clause.comparison"
+    num_clauses: int
+    models: list[CompareModelResult]
+    agreement: CompareAgreement | None = None

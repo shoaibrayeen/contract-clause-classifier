@@ -116,6 +116,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "huggingface-hub" },
+    { name = "joblib" },
     { name = "numpy" },
     { name = "psutil" },
     { name = "pyarrow" },
@@ -125,6 +126,7 @@ dependencies = [
     { name = "pyyaml" },
     { name = "rich" },
     { name = "safetensors" },
+    { name = "scikit-learn" },
     { name = "torch" },
     { name = "transformers" },
     { name = "typer" },
@@ -140,7 +142,6 @@ dev = [
 train = [
     { name = "accelerate" },
     { name = "peft" },
-    { name = "scikit-learn" },
 ]
 viz = [
     { name = "matplotlib" },
@@ -151,6 +152,7 @@ viz = [
 requires-dist = [
     { name = "fastapi", specifier = "==0.143.0" },
     { name = "huggingface-hub", specifier = "==2.2.0" },
+    { name = "joblib", specifier = "==1.6.0" },
     { name = "numpy", specifier = "==2.5.3" },
     { name = "psutil", specifier = "==7.2.2" },
     { name = "pyarrow", specifier = "==26.0.0" },
@@ -160,6 +162,7 @@ requires-dist = [
     { name = "pyyaml", specifier = "==6.0.3" },
     { name = "rich", specifier = "==15.0.0" },
     { name = "safetensors", specifier = "==0.8.0" },
+    { name = "scikit-learn", specifier = "==1.9.1" },
     { name = "torch", specifier = "==2.14.1" },
     { name = "transformers", specifier = "==5.19.0" },
     { name = "typer", specifier = "==0.27.3" },
@@ -175,7 +178,6 @@ dev = [
 train = [
     { name = "accelerate", specifier = "==1.15.0" },
     { name = "peft", specifier = "==0.21.2" },
-    { name = "scikit-learn", specifier = "==1.9.1" },
 ]
 viz = [
     { name = "matplotlib", specifier = "==3.11.2" },

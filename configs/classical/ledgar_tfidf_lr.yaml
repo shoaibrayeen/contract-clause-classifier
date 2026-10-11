@@ -1,0 +1,46 @@
+# Classical clause classifier: TF-IDF features + logistic regression (served), on the same LEDGAR data, splits
+# and 78 clause types as the transformer. Linear SVM and Complement Naive Bayes are trained on the same
+# features for comparison only (shown on docs/models/classical.html). CPU only.
+#
+# Timing check on the full data (2026-10-11): 248k features in 21 s; validation accuracy (10,000 rows):
+#   logistic regression C=10   91.40%  (fit 279 s, 87 iterations)
+#   linear SVM C=0.5           91.57%  (fit 46 s)
+#   complement naive bayes     83.76%  (fit 2 s)
+# Logistic regression is served for its calibrated probabilities and per-class phrase weights.
+
+model_version: 1                 # next classical version -> artifacts/classical/runs/<run_name>-v<N>; bumped by `make classical`
+run_name: ledgar-tfidf-lr
+output_dir: artifacts/classical/runs
+seed: 42
+
+data:                            # same data and label groups as configs/ledgar_qwen3_0.6b.yaml
+  data_dir: data
+  dataset_config: ledgar
+  label_groups: configs/ledgar_label_groups.yaml
+
+features:
+  word:                          # phrases such as "governed by", "shall terminate"
+    ngram_range: [1, 2]
+    min_df: 2
+    max_features: 300000
+  char:                          # character 3-5 grams within words: spelling and morphology variants
+    ngram_range: [3, 5]
+    min_df: 3
+    max_features: 300000
+  sublinear_tf: true
+  lowercase: true
+
+logistic_regression:             # served model; C picked by validation accuracy
+  C_grid: [3, 10, 30]
+  max_iter: 2000
+
+linear_svm:                      # comparison only (no native probabilities; a calibrated copy is also fitted)
+  enabled: true
+  C_grid: [0.25, 0.5, 1.0]
+  calibration_cv: 3
+
+complement_nb:                   # comparison only
+  enabled: true
+  alpha_grid: [0.1, 0.3, 1.0]
+
+learning_curve: [0.1, 0.25, 0.5, 1.0]   # fractions of the training split, for the served configuration
