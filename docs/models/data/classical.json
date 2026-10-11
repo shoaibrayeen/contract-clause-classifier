@@ -1,0 +1,310 @@
+{
+  "id": "ledgar-tfidf-lr-v1",
+  "model_info": {
+    "id": "ledgar-tfidf-lr-v1",
+    "base_name": "ledgar-tfidf-lr",
+    "version": 1,
+    "family": "classical",
+    "backend": "sklearn",
+    "base_model": null,
+    "method": "tfidf+logistic_regression",
+    "classifier": {
+      "type": "LogisticRegression",
+      "C": 30,
+      "max_iter": 2000
+    },
+    "features": {
+      "word": {
+        "analyzer": "word",
+        "ngram_range": [
+          1,
+          2
+        ],
+        "min_df": 2,
+        "n_features": 178539
+      },
+      "char": {
+        "analyzer": "char_wb",
+        "ngram_range": [
+          3,
+          5
+        ],
+        "min_df": 3,
+        "n_features": 74564
+      },
+      "total": 253103
+    },
+    "num_labels": 78,
+    "label_groups": "configs/ledgar_label_groups.yaml",
+    "best_val_accuracy": 0.9138,
+    "best_val_macro_f1": 0.884013876346794,
+    "best_val_top3_accuracy": 0.9756,
+    "best_val_log_loss": 0.34451166259459937,
+    "best_metric": "accuracy",
+    "train_examples": 60000,
+    "train_seconds": 1440.8,
+    "model_size_mb": 145.2,
+    "run_dir": "/Users/shoaib.rayeen/my_space/contract-clause-classifier/artifacts/classical/runs/ledgar-tfidf-lr-v1",
+    "created": 1791737464.8772979,
+    "created_at": "2026-10-11T16:51:04+00:00",
+    "temperature": 1.0966031601145847,
+    "latency_ms_per_clause_cpu": 0.77,
+    "test": {
+      "split": "test",
+      "n": 10000,
+      "accuracy": 0.9088,
+      "top3_accuracy": 0.9733,
+      "micro_f1": 0.9088,
+      "macro_f1": 0.882361706123298,
+      "ece": 0.018726607983482534
+    }
+  },
+  "candidates": [
+    {
+      "family": "logistic_regression",
+      "params": {
+        "C": 3
+      },
+      "fit_seconds": 251.4,
+      "validation": {
+        "accuracy": 0.9104,
+        "top3_accuracy": 0.9757,
+        "macro_f1": 0.8781085239480041,
+        "log_loss": 0.37547134709876484
+      },
+      "train": {
+        "accuracy": 0.9828166666666667,
+        "top3_accuracy": 0.9993333333333333,
+        "macro_f1": 0.9786906426097147,
+        "log_loss": 0.14408754398614523
+      }
+    },
+    {
+      "family": "logistic_regression",
+      "params": {
+        "C": 10
+      },
+      "fit_seconds": 313.7,
+      "validation": {
+        "accuracy": 0.9136,
+        "top3_accuracy": 0.976,
+        "macro_f1": 0.8834946241246254,
+        "log_loss": 0.3437040159458921
+      },
+      "train": {
+        "accuracy": 0.9976166666666667,
+        "top3_accuracy": 1.0,
+        "macro_f1": 0.9975719198052476,
+        "log_loss": 0.056473529977438375
+      }
+    },
+    {
+      "family": "logistic_regression",
+      "params": {
+        "C": 30
+      },
+      "fit_seconds": 297.8,
+      "validation": {
+        "accuracy": 0.9138,
+        "top3_accuracy": 0.9756,
+        "macro_f1": 0.884013876346794,
+        "log_loss": 0.34451166259459937
+      },
+      "train": {
+        "accuracy": 0.9995333333333334,
+        "top3_accuracy": 1.0,
+        "macro_f1": 0.9995243757944906,
+        "log_loss": 0.021811746978102366
+      },
+      "selected": true
+    },
+    {
+      "family": "linear_svm",
+      "params": {
+        "C": 0.25
+      },
+      "fit_seconds": 41.3,
+      "validation": {
+        "accuracy": 0.9133,
+        "top3_accuracy": 0.9729,
+        "macro_f1": 0.881530444733617
+      },
+      "train": {
+        "accuracy": 0.9792,
+        "top3_accuracy": 0.9997833333333334,
+        "macro_f1": 0.9735676464785202
+      }
+    },
+    {
+      "family": "linear_svm",
+      "params": {
+        "C": 0.5
+      },
+      "fit_seconds": 45.3,
+      "validation": {
+        "accuracy": 0.9158,
+        "top3_accuracy": 0.9717,
+        "macro_f1": 0.8861126226359614
+      },
+      "train": {
+        "accuracy": 0.9916166666666667,
+        "top3_accuracy": 0.9999666666666667,
+        "macro_f1": 0.9900490235662465
+      }
+    },
+    {
+      "family": "linear_svm",
+      "params": {
+        "C": 1.0
+      },
+      "fit_seconds": 49.4,
+      "validation": {
+        "accuracy": 0.9173,
+        "top3_accuracy": 0.97,
+        "macro_f1": 0.8887778966630131
+      },
+      "train": {
+        "accuracy": 0.9969,
+        "top3_accuracy": 1.0,
+        "macro_f1": 0.9965883230981897
+      }
+    },
+    {
+      "family": "linear_svm_calibrated",
+      "params": {
+        "C": 1.0,
+        "cv": 3
+      },
+      "fit_seconds": 101.7,
+      "validation": {
+        "accuracy": 0.9178,
+        "top3_accuracy": 0.9715,
+        "macro_f1": 0.8877914526133435,
+        "log_loss": 0.37838225499744194
+      },
+      "train": {
+        "accuracy": 0.99515,
+        "top3_accuracy": 1.0,
+        "macro_f1": 0.994534054678823,
+        "log_loss": 0.12273361943314137
+      }
+    },
+    {
+      "family": "complement_nb",
+      "params": {
+        "alpha": 0.1
+      },
+      "fit_seconds": 1.3,
+      "validation": {
+        "accuracy": 0.8419,
+        "top3_accuracy": 0.9425,
+        "macro_f1": 0.7763968565324565,
+        "log_loss": 1.1610747040758942
+      },
+      "train": {
+        "accuracy": 0.8965333333333333,
+        "top3_accuracy": 0.9821333333333333,
+        "macro_f1": 0.8552025792171383,
+        "log_loss": 0.95290232030486
+      }
+    },
+    {
+      "family": "complement_nb",
+      "params": {
+        "alpha": 0.3
+      },
+      "fit_seconds": 1.3,
+      "validation": {
+        "accuracy": 0.8362,
+        "top3_accuracy": 0.9407,
+        "macro_f1": 0.7679409295383063,
+        "log_loss": 1.241212175411001
+      },
+      "train": {
+        "accuracy": 0.8828333333333334,
+        "top3_accuracy": 0.9773166666666666,
+        "macro_f1": 0.8367029620927864,
+        "log_loss": 1.088609766804711
+      }
+    },
+    {
+      "family": "complement_nb",
+      "params": {
+        "alpha": 1.0
+      },
+      "fit_seconds": 1.3,
+      "validation": {
+        "accuracy": 0.8249,
+        "top3_accuracy": 0.9354,
+        "macro_f1": 0.7513981601682561,
+        "log_loss": 1.3824831424184483
+      },
+      "train": {
+        "accuracy": 0.862,
+        "top3_accuracy": 0.9661166666666666,
+        "macro_f1": 0.8073193312158774,
+        "log_loss": 1.2985581052760853
+      }
+    }
+  ],
+  "learning_curve": [
+    {
+      "fraction": 0.1,
+      "train_examples": 6000,
+      "fit_seconds": 47.5,
+      "validation": {
+        "accuracy": 0.8668,
+        "top3_accuracy": 0.9515,
+        "macro_f1": 0.8168572829714901,
+        "log_loss": 0.5930704225069697
+      }
+    },
+    {
+      "fraction": 0.25,
+      "train_examples": 15000,
+      "fit_seconds": 84.4,
+      "validation": {
+        "accuracy": 0.8873,
+        "top3_accuracy": 0.9626,
+        "macro_f1": 0.8451039384524172,
+        "log_loss": 0.4760744467019236
+      }
+    },
+    {
+      "fraction": 0.5,
+      "train_examples": 30000,
+      "fit_seconds": 143.9,
+      "validation": {
+        "accuracy": 0.8977,
+        "top3_accuracy": 0.9678,
+        "macro_f1": 0.861005448449699,
+        "log_loss": 0.40881588213206815
+      }
+    },
+    {
+      "fraction": 1.0,
+      "train_examples": 60000,
+      "fit_seconds": 297.8,
+      "validation": {
+        "accuracy": 0.9138,
+        "top3_accuracy": 0.9756,
+        "macro_f1": 0.884013876346794,
+        "log_loss": 0.34451166259459937
+      }
+    }
+  ],
+  "test": {
+    "accuracy": 0.9088,
+    "top3_accuracy": 0.9733,
+    "micro_f1": 0.9088,
+    "macro_f1": 0.882361706123298,
+    "weighted_f1": 0.9066278549420773,
+    "nll": 0.38374789823359134,
+    "ece": 0.018726607983482534,
+    "ece_uncalibrated": 0.02550983655506714,
+    "temperature": 1.0966031601145847
+  },
+  "served": {
+    "C": 30
+  }
+}

@@ -57,6 +57,9 @@ Project memory: decisions, measurements and gotchas that are not obvious from th
 - **Document-level aggregation** = max confidence per label across provisions, kept if ≥ threshold. A single short clause can therefore yield an empty `document` list while `clauses[0].predictions` still has the top-1. (2026-10-11)
 - **In-training eval uses a fixed 3,000-example validation subset** (`train.eval_limit`) to keep evals around a minute; final metrics use the full splits. (2026-10-11)
 - Package import name is `classification` (folder `src/classification`); distribution name is `contract-clause-classifier`. (2026-10-11)
+- **Classical model (2026-10-11).** TF-IDF (word 1-2 + char_wb 3-5) + logistic regression is served; linear SVM is 0.4 points better on validation (91.78% vs 91.38%) but LR gives real probabilities and readable per-class phrase weights. Lives in its own folders (`src/classification/classical/`, `configs/classical/`, `scripts/classical/`, `artifacts/classical/runs/`), has its own `model_version`, and is marked `family: classical` in `model_info.json`. Runs without a family are transformers. `latest`/no model always means the newest transformer; `latest-classical` is the classical alias. (2026-10-11)
+- `/v1/compare` splits once with `Predictor.split` and calls `predict_provisions_document` per model so clause indexes align; it is a plain HTTP endpoint, not part of the OpenAI surface. Model pages are static HTML generated from artifacts (`make model-pages`), served at `/models/*`. Transformer test predictions for the comparison are cached in `artifacts/compare/<id>/`, never inside the v1 run folder, to keep v1 read-only. (2026-10-11)
+- `make all --classical` cannot exist (make parses `--classical` as its own option); the owner's request is met by `make all FAMILY=classical`, `make all-classical` and `make classical`. (2026-10-11)
 
 ## Measurements (Apple M4 Pro, 48 GB, MPS, torch 2.14.1)
 
@@ -72,6 +75,8 @@ Project memory: decisions, measurements and gotchas that are not obvious from th
 - LEDGAR token lengths with the Qwen3 tokenizer: mean 138, median 105, p90 292; 1.9% exceed 512 and are truncated. (2026-10-11)
 - Probe snapshot (493 examples, all hidden states): 120 s unsorted vs 24 s length-sorted. (2026-10-11)
 - Sanity run (256 examples, 64 steps): val accuracy 0.8% → 17.6%, proving the loop learns; training loss on a 256-example subset reaches about 0.0002 when run longer. (2026-10-11)
+- Classical `ledgar-tfidf-lr-v1` (2026-10-11): 253,103 features (178,539 word + 74,564 char), fitted in ~21 s. Validation: LR C=3/10/30 91.04/91.36/91.38% (fits 251/314/298 s), linear SVM C=0.25/0.5/1 91.33/91.58/91.73%, calibrated SVM 91.78%, CNB alpha 0.1 84.19%. Learning curve 6k/15k/30k/60k rows: 86.7/88.7/89.8/91.4%, still rising. Train log loss 0.022 vs validation 0.345 at C=30 (overfits but generalises best). Whole train incl. grid and learning curve 1,441 s. Test 90.88% acc, 97.33% top-3, 88.24% macro-F1, ECE 1.9% (T=1.10), 145 MB, 0.8-0.9 ms per provision on CPU. (2026-10-11)
+- Transformer vs classical on the 10k test split (2026-10-11): agree 94.2%, accuracy when agreeing 94.9%; of 580 disagreements the transformer is right 52.8%, classical 25.5%, both wrong 21.7%; either right 93.9%. Transformer higher F1 on 53 clause types, classical on 11 (differences over 0.5 points). CPU latency 103 ms vs 0.9 ms per provision. On demo/sample_contract.txt via /v1/compare: agreement 8/13, 195 ms (MPS) vs 4.3 ms. (2026-10-11)
 
 ## Gotchas
 
@@ -101,3 +106,8 @@ Project memory: decisions, measurements and gotchas that are not obvious from th
 - The segmenter must not merge short *numbered* sections (e.g. "11. Counterparts. ...") into neighbours: they are real provisions. Only unnumbered fragments under `min_words` are merged. (2026-10-11)
 - `transformers` 5.x uses `dtype=` (not `torch_dtype=`) in `from_pretrained`. (2026-10-11)
 - HF Hub requests log at INFO via `httpx`; `scripts/02_train.py` lowers those loggers to WARNING. (2026-10-11)
+- `pgrep -f "classical/01_train"` in a wait loop matches the loop's own command line, so the loop never ends. Wait on a PID or a file instead. (2026-10-11)
+- Running a command in the owner's Terminal tab interrupted the classical training started there; never type into a tab that is running a job. (2026-10-11)
+- API tests that build the app must pass `classical_runs_dir` (tmp path), or the real `artifacts/classical/runs` leaks in and e.g. the "no model" health test returns 200. (2026-10-11)
+- Starlette's test client normalises `..` in URLs, so path-traversal tests for `/models/assets/` must use encoded `%2F`/`%2e%2e`. (2026-10-11)
+- `TfidfVectorizer(dtype=float)` warns; use `np.float64`. (2026-10-11)

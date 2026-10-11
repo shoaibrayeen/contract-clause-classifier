@@ -219,6 +219,7 @@ async function loadModels() {
     const r = await fetch("/v1/models", { headers: headers() });
     if (r.status === 401) { $("keybox").hidden = false; return; }
     const data = (await r.json()).data || [];
+    MODEL_CARDS = Object.fromEntries(data.map(m => [m.id, m]));
     const tr = data.find(m => (m.family || "transformer") === "transformer");
     const cl = data.find(m => m.family === "classical");
     sel.replaceChildren();
@@ -272,6 +273,11 @@ function render(result, resp, ms) {
 }
 
 const NAMES = { transformer: "Transformer", classical: "Classical" };
+let MODEL_CARDS = {};
+const testAcc = (id) => {
+  const m = MODEL_CARDS[id] && MODEL_CARDS[id].metrics;
+  return m && m.test_accuracy != null ? ` · test accuracy ${pct(m.test_accuracy)}` : "";
+};
 
 function renderCompare(resp, ms) {
   const out = $("out");
@@ -283,9 +289,11 @@ function renderCompare(resp, ms) {
     ag ? el("span", {}, "Agreement ", el("b", {}, `${ag.clauses_agree}/${ag.clauses_total} (${pct(ag.rate)})`)) : "",
     el("span", {}, "Round trip ", el("b", {}, `${ms} ms`)));
   const legend = el("div", { class: "legend" },
-    ...resp.models.map((m, i) => el("span", {}, el("span", { class: "sw", style: `background:${i ? "#eb6834" : "var(--bar)"}` }), `${NAMES[m.family] || m.family}: ${m.id}`)));
+    ...resp.models.map((m, i) => el("span", {}, el("span", { class: "sw", style: `background:${i ? "#eb6834" : "var(--bar)"}` }),
+      `${NAMES[m.family] || m.family}: ${m.id}${testAcc(m.id)}`)));
+  const note = el("p", { class: "hint" }, "Bars and chips show each model's confidence for this text; test accuracy is each model's measured accuracy on the 10,000-provision LEDGAR test set.");
 
-  const doc = el("div", {}, el("h2", {}, "Clause types found"), legend);
+  const doc = el("div", {}, el("h2", {}, "Clause types found"), legend, note);
   const names = [];
   for (const m of resp.models) for (const d of m.document) if (!names.includes(d.name)) names.push(d.name);
   const conf = (m, n) => (m.document.find(d => d.name === n) || {}).confidence || 0;

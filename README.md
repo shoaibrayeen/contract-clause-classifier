@@ -1,10 +1,17 @@
 # Contract Clause Classifier
 
-Fine-tune a ~0.6B language model (Qwen3-0.6B) to recognise **clause types in contracts**, then serve it through an **OpenAI-compatible FastAPI**.
+Fine-tune a ~0.6B language model (Qwen3-0.6B) to recognise **clause types in contracts**, train a **classical machine-learning model** on the same data, and serve both through an **OpenAI-compatible FastAPI** with a side-by-side playground.
 
 Give it a contract (text, PDF or DOCX). It splits the contract into provisions, classifies each one into one of **78 clause types** (LEDGAR's 100 labels with legal synonyms merged), and returns calibrated confidences in an OpenAI-style response ([format and real examples](#api-fastapi-openai-compatible)).
 
-The current model, **`ledgar-qwen3-0.6b-v1`**, scores **92.5% accuracy** and **97.7% top-3 accuracy** on the 10,000-provision LEDGAR test set.
+Two models, same data, same 10,000-provision LEDGAR test set:
+
+| Model | Type | Test accuracy | Top-3 | Training | Per provision (CPU) |
+|---|---|---|---|---|---|
+| **`ledgar-qwen3-0.6b-v1`** | fine-tuned transformer (default) | **92.46%** | 97.69% | 10 h on a laptop GPU | 103 ms |
+| **`ledgar-tfidf-lr-v1`** | classical: TF-IDF + logistic regression | **90.88%** | 97.33% | 24 min on CPU | 0.9 ms |
+
+They agree on 94.2% of test provisions, and when they agree they are right 94.9% of the time. Details: [Transformer vs classical](#transformer-vs-classical) and the generated model pages ([compare](docs/models/compare.html), [transformer](docs/models/transformer.html), [classical](docs/models/classical.html)).
 
 ### How v1 was trained
 
@@ -61,20 +68,22 @@ All three GIFs come from the real `ledgar-qwen3-0.6b-v1` model and its training 
 6. [Setup](#setup)
 7. [Run the full pipeline](#run-the-full-pipeline)
 8. [Model versions](#model-versions)
-9. [Training in detail](#training-in-detail)
-10. [Training telemetry and visualisation](#training-telemetry-and-visualisation)
-11. [Evaluation](#evaluation)
-12. [Predict from the command line](#predict-from-the-command-line)
-13. [Playground](#playground)
-14. [API (FastAPI, OpenAI-compatible)](#api-fastapi-openai-compatible)
-15. [Docker](#docker)
-16. [Project layout](#project-layout)
-17. [Configuration reference](#configuration-reference)
-18. [Testing](#testing)
-19. [Troubleshooting](#troubleshooting)
-20. [Pinned versions](#pinned-versions)
-21. [License](#license)
-22. [Author](#author)
+9. [Classical model](#classical-model)
+10. [Transformer vs classical](#transformer-vs-classical)
+11. [Training in detail](#training-in-detail)
+12. [Training telemetry and visualisation](#training-telemetry-and-visualisation)
+13. [Evaluation](#evaluation)
+14. [Predict from the command line](#predict-from-the-command-line)
+15. [Playground](#playground)
+16. [API (FastAPI, OpenAI-compatible)](#api-fastapi-openai-compatible)
+17. [Docker](#docker)
+18. [Project layout](#project-layout)
+19. [Configuration reference](#configuration-reference)
+20. [Testing](#testing)
+21. [Troubleshooting](#troubleshooting)
+22. [Pinned versions](#pinned-versions)
+23. [License](#license)
+24. [Author](#author)
 ---
 
 ## How it works
@@ -315,6 +324,74 @@ Each version's `merged/model_info.json` records its id, version, creation time, 
 
 ---
 
+## Classical model
+
+A traditional machine-learning classifier trained on exactly the same data, splits and 78 clause types as the transformer, kept in its own folders: `src/classification/classical/`, `configs/classical/`, `scripts/classical/`, `artifacts/classical/runs/`. It runs on the CPU, trains in minutes, and every prediction can be traced to weighted phrases.
+
+```bash
+make classical                 # data -> train -> evaluate -> model pages -> bump the classical version
+make all FAMILY=classical      # the same flow through `make all`
+make all-classical             # alias
+```
+
+`make all --classical` is not possible because `make` reads `--classical` as one of its own options; use one of the three commands above. The plain `make all` still runs the transformer flow, unchanged.
+
+| Step | Command | What it does |
+|---|---|---|
+| Train | `make classical-train` | TF-IDF features (word 1-2 grams + character 3-5 grams, 253,103 features) fitted once on the training split; logistic regression for C in {3, 10, 30}, the best by validation accuracy is served; linear SVM and Complement Naive Bayes trained on the same features for comparison; learning curve on 10/25/50/100% of the data |
+| Evaluate | `make classical-evaluate` | temperature calibration on validation, full test report (same format as the transformer), CPU latency, test predictions for the comparison |
+| Pages | `make model-pages` | regenerates `docs/models/{compare,transformer,classical}.html` |
+| Bump | `make classical-bump` | raises `model_version` in `configs/classical/ledgar_tfidf_lr.yaml` (next run: `ledgar-tfidf-lr-v2`) |
+
+Versions follow the same rules as the transformer: every run is a new `ledgar-tfidf-lr-v<N>`, nothing is overwritten, and `make models` lists both families.
+
+Measured for `ledgar-tfidf-lr-v1`:
+
+| Candidate (validation split, 10,000 rows) | Accuracy | Top-3 | Macro-F1 | Log loss | Fit |
+|---|---|---|---|---|---|
+| **Logistic regression, C=30 (served)** | **91.38%** | 97.56% | 88.40% | 0.345 | 298 s |
+| Logistic regression, C=10 | 91.36% | 97.60% | 88.35% | 0.344 | 314 s |
+| Logistic regression, C=3 | 91.04% | 97.57% | 87.81% | 0.375 | 251 s |
+| Linear SVM, C=1 (calibrated) | 91.78% | 97.15% | 88.78% | 0.378 | 102 s |
+| Linear SVM, C=0.5 | 91.58% | 97.17% | 88.61% | – | 45 s |
+| Complement Naive Bayes, alpha=0.1 | 84.19% | 94.25% | 77.64% | 1.161 | 1 s |
+
+The linear SVM is 0.4 points more accurate on validation, but logistic regression is served because it gives real probabilities for the confidence scores and readable per-class phrase weights. The learning curve still rises at 60,000 provisions (86.7% with 6,000, 88.7% with 15,000, 89.8% with 30,000, 91.4% with 60,000), so more data would help this model more than tuning.
+
+On the test split: **90.88% accuracy, 97.33% top-3, 88.24% macro-F1, 1.9% calibration error**, under 1 ms per provision on one CPU core, 145 MB on disk. The [classical page](docs/models/classical.html) has every candidate, the learning and loss curves, per-class F1, confusions, and the strongest phrases for each clause type.
+
+---
+
+## Transformer vs classical
+
+Every number below is from the same 10,000-provision test split ([full comparison page](docs/models/compare.html)).
+
+| | Transformer `ledgar-qwen3-0.6b-v1` | Classical `ledgar-tfidf-lr-v1` |
+|---|---|---|
+| Accuracy | **92.46%** | 90.88% |
+| Top-3 accuracy | **97.69%** | 97.33% |
+| Macro-F1 | **89.67%** | 88.24% |
+| Calibration error | 2.2% | **1.9%** |
+| Clause types where it has higher F1 (by more than 0.5 points) | **53** | 11 |
+| Training | 10 h, laptop GPU | **24 min, CPU** |
+| Per provision on a CPU | 103 ms | **0.9 ms** |
+| Size | 1.2 GB | **145 MB** |
+| Explainability | none built in | **weighted phrases per clause type** |
+
+**They agree on 94.2% of provisions, and are right 94.9% of the time when they do.** On the 580 provisions where they disagree, the transformer is right 52.8%, the classical model 25.5%, and both are wrong 21.7%. Agreement is therefore a useful confidence signal: when the two disagree, the provision deserves a human look. Both make the same kinds of mistakes (Taxes vs Withholdings, Assignments vs Successors and Assigns), which points to genuinely ambiguous clause types rather than model weaknesses.
+
+Use the transformer for the best accuracy and for unusual wording, the classical model where speed, cost or explanations matter, and both together (the playground's compare mode, `POST /v1/compare`) to flag uncertain provisions.
+
+**Model pages.** `make model-pages` generates three standalone pages from the saved artifacts, also served by the API at `/models/compare`, `/models/transformer` and `/models/classical`:
+
+* [`docs/models/compare.html`](docs/models/compare.html): side-by-side metrics, agreement analysis, per-class F1 differences, confusions, recommendation.
+* [`docs/models/transformer.html`](docs/models/transformer.html): architecture, training settings, loss and learning-rate curves, validation curves, test metrics, per-class F1, confusions, versions.
+* [`docs/models/classical.html`](docs/models/classical.html): features and classifier, candidates with training and validation log loss, learning curve, test metrics, per-class F1, confusions, top phrases per clause type.
+
+GitHub shows `.html` files as source; open them locally, through the API, or publish `docs/` with GitHub Pages to view them rendered.
+
+---
+
 ## Training in detail
 
 ```bash
@@ -450,11 +527,15 @@ Sample output for the `--text` call:
 make serve          # then open http://localhost:8000/playground
 ```
 
-A single page served by the API (see the [playground GIF](#see-it-in-action) at the top) (no extra dependencies). Paste a clause or a whole contract, or load one of the samples, pick a model version (the latest is preselected), adjust top-k and the confidence threshold, and press **Classify** (or Ctrl/Cmd + Enter). It shows:
+A single page served by the API (see the [playground GIF](#see-it-in-action) at the top; no extra dependencies). Paste a clause or a whole contract, or load one of the samples, adjust top-k and the confidence threshold, and press **Classify** (or Ctrl/Cmd + Enter).
 
-* **Clause types found**: every clause type detected in the input, with a confidence bar.
-* **Per clause**: each provision the input was split into, with its top predictions and confidences (below 50% shown in amber).
-* The model version that answered, latency, token count, and the raw API response.
+**Compare mode is the default** when both a transformer and a classical model are trained: the text is split once and both models classify the same provisions. It shows:
+
+* **Clause types found**: for every clause type, two confidence bars, blue for the transformer and orange for the classical model. The legend also shows each model's measured test accuracy, so you see both how sure each model is on this text and how accurate it is overall.
+* **Per clause**: each provision with both models' top predictions and confidences, marked **agree** or **differ**.
+* Both models' latency, the agreement count, and the raw `POST /v1/compare` response.
+
+The model menu also offers a single model: the latest transformer, the latest classical model, or any specific version. In single-model mode it shows that model's clause types, per-clause predictions, latency and token count. The header links to the three model pages.
 
 The status pill shows the latest model and device. Before any model is trained it explains how to train one. If the server has an `API_KEY`, the page asks for it. `http://localhost:8000/` redirects to the playground.
 
@@ -464,7 +545,7 @@ The playground GIF is a real session with `ledgar-qwen3-0.6b-v1`. Re-record it a
 make playground-gif        # drives headless Chrome through the playground -> demo/playground_usage.gif
 ```
 
-It starts the API if none is running, needs Google Chrome or Chromium (set `CHROME=/path/to/chrome` if it is elsewhere), and takes about 10 seconds. Note what the recording shows: the IP-infringement indemnity in the sample contract is labelled Intellectual Property at 65%, shown in amber as uncertain, because its wording is about IP rights.
+It starts the API if none is running, needs Google Chrome or Chromium (set `CHROME=/path/to/chrome` if it is elsewhere), and takes about 10 seconds. Note what the recording shows: the IP-infringement indemnity in the sample contract is labelled Intellectual Property at 65% by the transformer (amber, uncertain, because its wording is about IP rights) and Indemnifications at 99.8% by the classical model, which is right. That clause is marked **differ**, exactly the kind of provision compare mode is meant to surface.
 
 ---
 
@@ -479,10 +560,12 @@ make serve                       # http://localhost:8000; playground at /playgro
 | GET | `/health` | 200 when the latest model is loaded (with all available versions), 503 otherwise |
 | GET | `/v1/models` | every trained version, newest first; `is_latest` marks the default |
 | GET | `/v1/models/{id}` | one version (`latest` and base names resolve too) |
-| POST | `/v1/chat/completions` | classify the last user message with the latest model, or the one named in `model` |
+| POST | `/v1/chat/completions` | classify the last user message with the latest transformer, or the model named in `model` (`latest-classical` or any version id) |
+| POST | `/v1/compare` | both model families on the same provisions, side by side, with agreement |
 | GET | `/v1/dataset` | LEDGAR rows, 10 per page by default: `?split=train&offset=0&limit=10` (limit max 100) |
 | GET | `/v1/labels` | the 78 clause types |
-| GET | `/playground` | browser playground (`/` redirects here) |
+| GET | `/playground` | browser playground, compare mode by default (`/` redirects here) |
+| GET | `/models/compare`, `/models/transformer`, `/models/classical` | the generated model pages |
 
 ### Endpoints with sample requests and responses
 
@@ -501,12 +584,13 @@ curl -s localhost:8000/health
   "model": "ledgar-qwen3-0.6b-v1",
   "latest_model": "ledgar-qwen3-0.6b-v1",
   "latest_version": 1,
-  "available_models": ["ledgar-qwen3-0.6b-v1"],
-  "loaded_models": ["ledgar-qwen3-0.6b-v1"],
+  "latest_classical": "ledgar-tfidf-lr-v1",
+  "available_models": ["ledgar-qwen3-0.6b-v1", "ledgar-tfidf-lr-v1"],
+  "loaded_models": ["ledgar-qwen3-0.6b-v1", "ledgar-tfidf-lr-v1"],
   "models_dir": "contract-clause-classifier/artifacts/runs",
   "device": "mps",
   "num_labels": 78,
-  "uptime_s": 3.414,
+  "uptime_s": 3.296,
   "version": "1.0.0",
   "detail": null
 }
@@ -542,6 +626,7 @@ The latest model is loaded at startup; other versions load on first use and up t
 curl -s localhost:8000/v1/models
 curl -s localhost:8000/v1/models/latest
 curl -s localhost:8000/v1/models/ledgar-qwen3-0.6b-v1
+curl -s localhost:8000/v1/models/latest-classical
 ```
 
 ```json
@@ -549,15 +634,24 @@ curl -s localhost:8000/v1/models/ledgar-qwen3-0.6b-v1
   "object": "list",
   "data": [
     {
-      "id": "ledgar-qwen3-0.6b-v1", "object": "model", "created": 1791711723, "owned_by": "local",
-      "version": 1, "is_latest": true, "base_name": "ledgar-qwen3-0.6b", "base_model": "Qwen/Qwen3-0.6B-Base",
+      "id": "ledgar-tfidf-lr-v1", "object": "model", "created": 1791737464, "owned_by": "local",
+      "version": 1, "family": "classical", "is_latest": false, "base_name": "ledgar-tfidf-lr", "base_model": null,
       "loaded": true,
+      "metrics": {"best_val_accuracy": 0.9138, "best_val_macro_f1": 0.884, "test_accuracy": 0.9088,
+                  "test_top3_accuracy": 0.9733, "test_macro_f1": 0.8824}
+    },
+    {
+      "id": "ledgar-qwen3-0.6b-v1", "object": "model", "created": 1791711723, "owned_by": "local",
+      "version": 1, "family": "transformer", "is_latest": true, "base_name": "ledgar-qwen3-0.6b",
+      "base_model": "Qwen/Qwen3-0.6B-Base", "loaded": true,
       "metrics": {"best_val_accuracy": 0.9223, "best_val_macro_f1": 0.8988, "test_accuracy": 0.9246,
                   "test_top3_accuracy": 0.9769, "test_macro_f1": 0.8967}
     }
   ]
 }
 ```
+
+`family` is `transformer` or `classical`. `is_latest` marks the default model, which is always the newest transformer.
 
 Versions are listed newest first. The non-standard fields (`version`, `is_latest`, `metrics`, …) are ignored by OpenAI clients. An unknown id returns `404` in the OpenAI error format and lists what is available:
 
@@ -578,7 +672,8 @@ Which model answers:
 
 | `model` in the request | Model used |
 |---|---|
-| omitted, `""`, `"latest"` or `"clause-classifier-qwen3-0.6b"` (the `MODEL_ID` alias) | the latest version |
+| omitted, `""`, `"latest"` or `"clause-classifier-qwen3-0.6b"` (the `MODEL_ID` alias) | the latest transformer version |
+| `"latest-classical"` | the latest classical version |
 | a version id, e.g. `"ledgar-qwen3-0.6b-v1"` | that version |
 | a base name, e.g. `"ledgar-qwen3-0.6b"` | the latest version of that series |
 | anything else | `404` listing the available versions |
@@ -680,6 +775,50 @@ Unsupported options return `400`:
 
 And before any model is trained the endpoint returns `503` with code `model_not_loaded`.
 
+#### `POST /v1/compare` (both models on the same text)
+
+```bash
+curl -s localhost:8000/v1/compare -H "Content-Type: application/json" -d '{
+  "text": "1. Indemnification. Provider shall indemnify, defend and hold harmless Customer from and against any and all losses, damages, liabilities and expenses arising out of any third-party claim that the Services infringe any intellectual property right.\n\n2. Governing Law. This Agreement shall be governed by and construed in accordance with the laws of the State of New York.",
+  "top_k": 2
+}'
+```
+
+The text is split into provisions once and every model scores the same list, so clause indexes line up. Response (clause texts shortened):
+
+```json
+{
+  "object": "clause.comparison",
+  "num_clauses": 2,
+  "models": [
+    {
+      "id": "ledgar-qwen3-0.6b-v1", "family": "transformer", "version": 1, "latency_ms": 190.2,
+      "document": [{"name": "Governing Laws", "confidence": 0.9699}, {"name": "Intellectual Property", "confidence": 0.5844},
+                   {"name": "Indemnifications", "confidence": 0.3598}],
+      "clauses": [
+        {"index": 0, "text": "1. Indemnification. Provider shall indemnify, defend and hold harmless ...",
+         "predictions": [{"name": "Intellectual Property", "confidence": 0.5844}, {"name": "Indemnifications", "confidence": 0.3598}]},
+        {"index": 1, "text": "2. Governing Law. This Agreement shall be governed by ...",
+         "predictions": [{"name": "Governing Laws", "confidence": 0.9699}]}
+      ]
+    },
+    {
+      "id": "ledgar-tfidf-lr-v1", "family": "classical", "version": 1, "latency_ms": 4.9,
+      "document": [{"name": "Governing Laws", "confidence": 1.0}, {"name": "Indemnifications", "confidence": 0.9978}],
+      "clauses": [
+        {"index": 0, "text": "1. Indemnification. Provider shall indemnify, defend and hold harmless ...",
+         "predictions": [{"name": "Indemnifications", "confidence": 0.9978}]},
+        {"index": 1, "text": "2. Governing Law. This Agreement shall be governed by ...",
+         "predictions": [{"name": "Governing Laws", "confidence": 1.0}]}
+      ]
+    }
+  ],
+  "agreement": {"clauses_agree": 1, "clauses_total": 2, "rate": 0.5, "per_clause": [false, true]}
+}
+```
+
+Options: `messages` (OpenAI style, last user message) instead of `text`; `models` to pick specific versions (default: the latest of each family); `top_k`, `threshold`, `segment` as in chat completions. Returns `503` naming the missing family if either model is not trained (`make all` / `make classical`). This endpoint is not part of the OpenAI API, so call it as a plain HTTP request.
+
 #### `GET /v1/dataset` (browse the training data, 10 rows per page)
 
 ```bash
@@ -768,7 +907,7 @@ Request details:
 * Errors use the OpenAI envelope: `{"error": {"message", "type", "param", "code"}}`.
 * Set `API_KEY` to require `Authorization: Bearer <key>` on `/v1/*`. `/health` stays open.
 
-Environment variables (see `.env.example`): `RUNS_DIR` (where versions live), `MODEL_ID` (alias for the latest), `MAX_LOADED_MODELS`, `MODEL_RESCAN_SECONDS`, `LABEL_GROUPS`, `MODEL_DIR` (optional extra model folder), `DATA_DIR`, `DEVICE`, `TOP_K`, `THRESHOLD`, `BATCH_SIZE`, `API_KEY`, `CORS_ORIGINS`, `MAX_INPUT_CHARS`.
+Environment variables (see `.env.example`): `RUNS_DIR` (where transformer versions live), `CLASSICAL_RUNS_DIR` (classical versions), `PAGES_DIR` (model pages), `MODEL_ID` (alias for the latest), `MAX_LOADED_MODELS`, `MODEL_RESCAN_SECONDS`, `LABEL_GROUPS`, `MODEL_DIR` (optional extra model folder), `DATA_DIR`, `DEVICE`, `TOP_K`, `THRESHOLD`, `BATCH_SIZE`, `API_KEY`, `CORS_ORIGINS`, `MAX_INPUT_CHARS`.
 
 ---
 
@@ -784,7 +923,7 @@ make docker-down
 
 * Docker on macOS cannot use the Apple GPU, so the container runs on CPU (fine for classification). For GPU speed on a Mac, use `make serve` natively.
 * The image is about 1.9 GB (CPU-only torch). It runs as a non-root user and has a `HEALTHCHECK` on `/health`.
-* The container serves every version under `/app/artifacts/runs` (default: latest) plus the playground, and picks up newly trained versions without a restart.
+* The container serves every transformer version under `/app/artifacts/runs` (default: latest) and every classical version under `/app/artifacts/classical/runs`, plus the playground, `/v1/compare` and the model pages, and picks up newly trained versions without a restart.
 * **Colima users:** Colima only shares folders listed under `mounts:` in `~/.colima/default/colima.yaml`. If the project is not under a shared folder, the mounts arrive empty and `/health` reports "No trained model". Add the project folder to `mounts:` and run `colima restart`, or copy the model into a container:
 
   ```bash
@@ -804,13 +943,15 @@ contract-clause-classifier/
 ├── pyproject.toml / uv.lock    pinned dependencies (Python 3.12)
 ├── configs/
 │   ├── ledgar_qwen3_0.6b.yaml  all training settings, incl. model_version
-│   └── ledgar_label_groups.yaml  legal-synonym labels merged into 78 clause types, with the reasoning
+│   ├── ledgar_label_groups.yaml  legal-synonym labels merged into 78 clause types, with the reasoning
+│   └── classical/ledgar_tfidf_lr.yaml  classical model settings, incl. its own model_version
 ├── src/classification/
 │   ├── config.py               config dataclasses, device + precision resolution
 │   ├── data.py                 LEDGAR download, tokenisation cache, length-grouped batching, dataset API store
 │   ├── labels.py               label map I/O
 │   ├── model.py                build (full or LoRA) / load / export the classifier
-│   ├── registry.py             model versions: naming, discovery, latest, bump
+│   ├── registry.py             model versions and families: naming, discovery, latest, bump
+│   ├── classical/              classical model: config, features, train, sklearn serving backend, explanations
 │   ├── train.py                device-agnostic training loop, checkpoints, resume
 │   ├── telemetry.py            run recorder, probe snapshots, system monitor
 │   ├── dashboard.py            live terminal dashboard
@@ -818,8 +959,9 @@ contract-clause-classifier/
 │   ├── segment.py              contract -> provisions
 │   ├── io_utils.py             read txt / pdf / docx
 │   ├── predict.py              Predictor: provisions -> [{name, confidence}]
-│   └── api/                    FastAPI app, multi-version model store, OpenAI schemas, routes, playground page
-├── scripts/                    01_prepare_data … 06_render_gif, 07_models (versions), 08_record_playground, 09_render_terminal_gif
+│   └── api/                    FastAPI app, multi-family model store, OpenAI schemas, routes (incl. /v1/compare, /models/*), playground
+├── scripts/                    01_prepare_data … 09_render_terminal_gif, 10_model_pages, 11_compare
+│   └── classical/              01_train, 02_evaluate (classical model)
 ├── tests/                      pytest suite (stub model; no download or GPU needed)
 ├── demo/                       sample contract, training chart GIFs, terminal replay GIFs, playground usage GIF
 ├── docs/TELEMETRY.md           telemetry file schema
@@ -832,10 +974,12 @@ contract-clause-classifier/
 ├── MEMORY.md                   project decisions and gotchas (agent memory)
 ├── CHANGELOG.md, changelog.html   release notes (changelog.html is generated: make changelog-html)
 ├── docs/releases/              GitHub release notes per version (v1.0.0.md)
+├── docs/models/                generated model pages: compare, transformer, classical (+ assets/, data/)
 ├── LICENSE                     Apache-2.0
 ├── data/raw/ledgar/            LEDGAR parquet files + attribution README (committed, 28 MB)
 ├── data/cache/                 (git-ignored) tokenised cache
-└── artifacts/                  (git-ignored) runs/<run>-v<N>/ per version, best -> latest version
+└── artifacts/                  (git-ignored) runs/<run>-v<N>/ per transformer version, classical/runs/ per classical
+                                version, compare/ cached test predictions, best -> latest transformer
 ```
 
 ---
@@ -867,6 +1011,17 @@ Everything lives in [configs/ledgar_qwen3_0.6b.yaml](configs/ledgar_qwen3_0.6b.y
 | `train.empty_cache_steps` | `25` | release cached accelerator memory |
 | `telemetry.*` | all on | what to record (see [docs/TELEMETRY.md](docs/TELEMETRY.md)) |
 
+
+Classical model settings live in [configs/classical/ledgar_tfidf_lr.yaml](configs/classical/ledgar_tfidf_lr.yaml):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `model_version` | `1` | next classical version (`ledgar-tfidf-lr-v<N>`); bumped by `make classical` |
+| `features.word` / `features.char` | 1-2 grams, min_df 2 / 3-5 grams, min_df 3, max 300,000 each | TF-IDF feature blocks |
+| `logistic_regression.C_grid` | `[3, 10, 30]` | served model; C picked by validation accuracy |
+| `linear_svm` / `complement_nb` | enabled | comparison candidates (reported, not served) |
+| `learning_curve` | `[0.1, 0.25, 0.5, 1.0]` | training-set fractions for the learning curve |
+
 ---
 
 ## Testing
@@ -875,7 +1030,7 @@ Everything lives in [configs/ledgar_qwen3_0.6b.yaml](configs/ledgar_qwen3_0.6b.y
 make test
 ```
 
-77 tests cover segmentation, label grouping, data paging and batching, model versioning (naming, never-overwrite, resume and restart, bumping, latest selection), multi-version serving and model selection, the dashboard fitting the terminal, the prediction output format, every API route and error case, the playground, API-key auth, the OpenAPI schema, compatibility with the official OpenAI Python SDK, that every AI assistant's rules file matches `AGENTS.md`, and that `changelog.html` and all version numbers agree with `CHANGELOG.md`. They use a keyword-based stub model, so they run in seconds with no download or GPU.
+87 tests cover segmentation, label grouping, the classical backend and model families, `/v1/compare`, the model pages, data paging and batching, model versioning (naming, never-overwrite, resume and restart, bumping, latest selection), multi-version serving and model selection, the dashboard fitting the terminal, the prediction output format, every API route and error case, the playground, API-key auth, the OpenAPI schema, compatibility with the official OpenAI Python SDK, that every AI assistant's rules file matches `AGENTS.md`, and that `changelog.html` and all version numbers agree with `CHANGELOG.md`. They use a keyword-based stub model, so they run in seconds with no download or GPU.
 
 ---
 

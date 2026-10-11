@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transformer vs classical · Contract Clause Classifier</title><style>
+:root{--bg:#fcfcfb;--surface:#fff;--text:#141413;--muted:#5f5e5a;--faint:#8a8984;--border:rgba(20,20,19,.12);
+--accent:#185fa5;--accent-bg:#e6f1fb;--good:#27500a;--good-bg:#eaf3de;--warn:#633806;--warn-bg:#faeeda;
+--font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161615;--surface:#20201f;--text:#efeee9;--muted:#c3c2b7;
+--faint:#8a8984;--border:rgba(255,255,255,.12);--accent:#85b7eb;--accent-bg:#0c2f52;--good:#c0dd97;--good-bg:#233d0b;--warn:#fac775;--warn-bg:#4a2c05}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 var(--font)}
+main{max-width:1060px;margin:0 auto;padding:28px 16px 64px}h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:34px 0 10px}
+h3{font-size:15px;margin:20px 0 6px}p{margin:0 0 10px}.sub{color:var(--muted);margin:0}.meta{color:var(--faint);font-size:13px}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 22px}nav a{color:var(--accent);text-decoration:none;border:1px solid var(--border);
+border-radius:8px;padding:4px 10px;font-size:14px}nav a.on{background:var(--accent-bg)}.card{background:var(--surface);border:1px solid var(--border);
+border-radius:12px;padding:18px 20px;margin:14px 0}.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px}.kpi .l{font-size:12px;color:var(--muted)}
+.kpi .v{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}table{border-collapse:collapse;width:100%;font-size:14px;margin:6px 0 12px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}th{color:var(--muted);font-weight:600}
+td.n{text-align:right;font-variant-numeric:tabular-nums}code{font-family:var(--mono);font-size:.9em;background:var(--accent-bg);padding:1px 5px;border-radius:4px}
+img{max-width:100%;border-radius:8px;border:1px solid var(--border);background:#fff}.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:820px){.two{grid-template-columns:1fr}}.tag{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--accent-bg);color:var(--accent)}
+.win{background:var(--good-bg);color:var(--good)}.lose{background:var(--warn-bg);color:var(--warn)}details summary{cursor:pointer;color:var(--muted)}
+.terms{font-size:13px;color:var(--muted)}footer{color:var(--faint);font-size:13px;margin-top:40px;border-top:1px solid var(--border);padding-top:14px}
+a{color:var(--accent)}
+</style></head>
+<body><main>
+<h1>Transformer vs classical</h1>
+<p class="sub">Contract Clause Classifier: LEDGAR clause types, 78 classes, same data and splits for every model.</p>
+<nav><a href="compare.html" class="on">Compare models</a><a href="transformer.html" class="">Transformer</a><a href="classical.html" class="">Classical</a><a href="../../changelog.html" class="">Changelog</a><a href="/playground" class="">Playground</a></nav>
+
+<p>Two different approaches trained on exactly the same data: <code>ledgar-qwen3-0.6b-v1</code> (fine-tuned transformer) and
+<code>ledgar-tfidf-lr-v1</code> (TF-IDF + logistic regression). Same 60,000 training provisions, 78 clause types, and the same
+10,000-provision test split for every number below. <a href="transformer.html">Transformer details</a> ·
+<a href="classical.html">Classical details</a>.</p>
+<div class="kpis"><div class="kpi"><div class="l">Transformer accuracy</div><div class="v">92.46%</div></div><div class="kpi"><div class="l">Classical accuracy</div><div class="v">90.88%</div></div><div class="kpi"><div class="l">Gap</div><div class="v">+1.58 pts</div></div><div class="kpi"><div class="l">Agreement</div><div class="v">94.2%</div></div><div class="kpi"><div class="l">Either right</div><div class="v">93.9%</div></div></div>
+
+<h2>Side by side</h2>
+<div class="card"><table><thead><tr><th></th><th>Transformer</th><th>Classical</th></tr></thead><tbody><tr><td class="">Test accuracy</td><td class="">92.46% <span class="tag win">better</span></td><td class="">90.88% <span class="tag lose"></span></td></tr><tr><td class="">Test top-3 accuracy</td><td class="">97.69% <span class="tag win">better</span></td><td class="">97.33% <span class="tag lose"></span></td></tr><tr><td class="">Test macro-F1</td><td class="">89.67% <span class="tag win">better</span></td><td class="">88.24% <span class="tag lose"></span></td></tr><tr><td class="">Calibration error (lower is better)</td><td class="">2.2% <span class="tag lose"></span></td><td class="">1.9% <span class="tag win">better</span></td></tr><tr><td class="">Log loss (lower is better)</td><td class="">0.3644 <span class="tag win">better</span></td><td class="">0.3837 <span class="tag lose"></span></td></tr><tr><td class="">Clause types where it has higher F1</td><td class="">53</td><td class="">11</td></tr><tr><td class="">Training time</td><td class="">10.0 h on a laptop GPU</td><td class="">24 min on CPU</td></tr><tr><td class="">Inference per provision (CPU)</td><td class="">103 ms</td><td class="">0.9 ms</td></tr><tr><td class="">Model size</td><td class="">1.2 GB</td><td class="">145 MB</td></tr><tr><td class="">Parameters / features</td><td class="">596M parameters</td><td class="">253,103 features × 78 classes</td></tr><tr><td class="">Explainability</td><td class="">no direct explanation</td><td class="">weighted phrases per clause type</td></tr><tr><td class="">Runtime needs</td><td class="">PyTorch + transformers; GPU optional</td><td class="">scikit-learn only; CPU</td></tr></tbody></table></div>
+
+<h2>Where they agree and disagree</h2>
+<div class="card">
+<p>On the full test split (10,000 provisions) the two models give the same top-1 clause type for
+<b>94.2%</b> of provisions. When they agree they are right <b>94.9%</b> of the time,
+so agreement is a strong confidence signal. On the 580 provisions where they disagree, the transformer is right
+52.8%, the classical model 25.5%, and both are wrong
+21.7%. At least one of the two is right for 93.9% of provisions.</p></div>
+
+<h2>Per clause type</h2>
+<p>The transformer has higher F1 on 53 clause types and the classical model on 11 (differences under 0.5 points not counted).</p>
+<img src="assets/compare_per_class_f1_delta.png" alt="Per-class F1 difference">
+<div class="two"><div><h3>Transformer: top confusions</h3><table><thead><tr><th>True clause type</th><th>Predicted as</th><th>Count</th></tr></thead><tbody><tr><td class="">Taxes</td><td class="">Withholdings</td><td class="n">21</td></tr><tr><td class="">Representations and Warranties</td><td class="">Survival</td><td class="n">13</td></tr><tr><td class="">Assignments</td><td class="">Successors and Assigns</td><td class="n">13</td></tr><tr><td class="">General</td><td class="">Payments</td><td class="n">12</td></tr><tr><td class="">Amendments</td><td class="">Entire Agreements</td><td class="n">10</td></tr><tr><td class="">Benefits</td><td class="">Successors and Assigns</td><td class="n">9</td></tr><tr><td class="">Enforceability</td><td class="">Severability</td><td class="n">9</td></tr><tr><td class="">Miscellaneous</td><td class="">Entire Agreements</td><td class="n">9</td></tr><tr><td class="">Venues</td><td class="">Governing Laws</td><td class="n">8</td></tr><tr><td class="">Successors and Assigns</td><td class="">Assignments</td><td class="n">8</td></tr></tbody></table></div>
+<div><h3>Classical: top confusions</h3><table><thead><tr><th>True clause type</th><th>Predicted as</th><th>Count</th></tr></thead><tbody><tr><td class="">Taxes</td><td class="">Withholdings</td><td class="n">19</td></tr><tr><td class="">Successors and Assigns</td><td class="">Assignments</td><td class="n">13</td></tr><tr><td class="">General</td><td class="">Payments</td><td class="n">13</td></tr><tr><td class="">Miscellaneous</td><td class="">Entire Agreements</td><td class="n">12</td></tr><tr><td class="">Assignments</td><td class="">Successors and Assigns</td><td class="n">12</td></tr><tr><td class="">Representations and Warranties</td><td class="">Survival</td><td class="n">12</td></tr><tr><td class="">Fees</td><td class="">Expenses</td><td class="n">9</td></tr><tr><td class="">Benefits</td><td class="">Successors and Assigns</td><td class="n">9</td></tr><tr><td class="">Employment</td><td class="">Duties and Positions</td><td class="n">8</td></tr><tr><td class="">Amendments</td><td class="">Entire Agreements</td><td class="n">8</td></tr></tbody></table></div></div>
+
+<h2>Which to use</h2>
+<div class="card"><p><b>Transformer</b> for the highest accuracy and for unusual or paraphrased wording, since it reads
+meaning rather than matching words. <b>Classical</b> when speed, cost or explanations matter: it is about
+112× faster per provision on a CPU, a fraction of the size, trains in minutes, and every prediction
+can be traced to phrases. <b>Both together</b> (the playground's compare mode, <code>POST /v1/compare</code>): when they
+agree, the answer is very likely right; when they disagree, the provision deserves a human look.</p></div>
+
+<footer>Generated 2026-10-11 22:34 by <code>scripts/10_model_pages.py</code> from the saved model artifacts. Regenerate with <code>make model-pages</code>.</footer>
+</main></body></html>

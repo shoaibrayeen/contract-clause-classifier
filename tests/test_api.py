@@ -25,7 +25,8 @@ def test_health_ok(client):
 
 
 def test_health_unavailable_without_model(tiny_data, tmp_path):
-    app = create_app(Settings(runs_dir=str(tmp_path / "runs")), dataset_store=DatasetStore(tiny_data))
+    app = create_app(Settings(runs_dir=str(tmp_path / "runs"), classical_runs_dir=str(tmp_path / "classical")),
+                     dataset_store=DatasetStore(tiny_data))
     with TestClient(app) as c:
         r = c.get("/health")
         assert r.status_code == 503 and r.json()["status"] == "unavailable"

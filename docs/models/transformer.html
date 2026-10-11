@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transformer model: ledgar-qwen3-0.6b-v1 · Contract Clause Classifier</title><style>
+:root{--bg:#fcfcfb;--surface:#fff;--text:#141413;--muted:#5f5e5a;--faint:#8a8984;--border:rgba(20,20,19,.12);
+--accent:#185fa5;--accent-bg:#e6f1fb;--good:#27500a;--good-bg:#eaf3de;--warn:#633806;--warn-bg:#faeeda;
+--font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161615;--surface:#20201f;--text:#efeee9;--muted:#c3c2b7;
+--faint:#8a8984;--border:rgba(255,255,255,.12);--accent:#85b7eb;--accent-bg:#0c2f52;--good:#c0dd97;--good-bg:#233d0b;--warn:#fac775;--warn-bg:#4a2c05}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 var(--font)}
+main{max-width:1060px;margin:0 auto;padding:28px 16px 64px}h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:34px 0 10px}
+h3{font-size:15px;margin:20px 0 6px}p{margin:0 0 10px}.sub{color:var(--muted);margin:0}.meta{color:var(--faint);font-size:13px}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 22px}nav a{color:var(--accent);text-decoration:none;border:1px solid var(--border);
+border-radius:8px;padding:4px 10px;font-size:14px}nav a.on{background:var(--accent-bg)}.card{background:var(--surface);border:1px solid var(--border);
+border-radius:12px;padding:18px 20px;margin:14px 0}.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px}.kpi .l{font-size:12px;color:var(--muted)}
+.kpi .v{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}table{border-collapse:collapse;width:100%;font-size:14px;margin:6px 0 12px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}th{color:var(--muted);font-weight:600}
+td.n{text-align:right;font-variant-numeric:tabular-nums}code{font-family:var(--mono);font-size:.9em;background:var(--accent-bg);padding:1px 5px;border-radius:4px}
+img{max-width:100%;border-radius:8px;border:1px solid var(--border);background:#fff}.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:820px){.two{grid-template-columns:1fr}}.tag{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--accent-bg);color:var(--accent)}
+.win{background:var(--good-bg);color:var(--good)}.lose{background:var(--warn-bg);color:var(--warn)}details summary{cursor:pointer;color:var(--muted)}
+.terms{font-size:13px;color:var(--muted)}footer{color:var(--faint);font-size:13px;margin-top:40px;border-top:1px solid var(--border);padding-top:14px}
+a{color:var(--accent)}
+</style></head>
+<body><main>
+<h1>Transformer model: ledgar-qwen3-0.6b-v1</h1>
+<p class="sub">Contract Clause Classifier: LEDGAR clause types, 78 classes, same data and splits for every model.</p>
+<nav><a href="compare.html" class="">Compare models</a><a href="transformer.html" class="on">Transformer</a><a href="classical.html" class="">Classical</a><a href="../../changelog.html" class="">Changelog</a><a href="/playground" class="">Playground</a></nav>
+
+<p>Fine-tuned transformer. A pretrained language model reads each provision in context and a classification
+head maps its final representation to one of the 78 clause types. Latest version: <code>ledgar-qwen3-0.6b-v1</code>.</p>
+<div class="kpis"><div class="kpi"><div class="l">Test accuracy</div><div class="v">92.46%</div></div><div class="kpi"><div class="l">Test top-3 accuracy</div><div class="v">97.69%</div></div><div class="kpi"><div class="l">Test macro-F1</div><div class="v">89.67%</div></div><div class="kpi"><div class="l">Calibration error</div><div class="v">2.2%</div></div><div class="kpi"><div class="l">Training time</div><div class="v">10.0 h</div></div><div class="kpi"><div class="l">Parameters</div><div class="v">596M</div></div></div>
+
+<h2>Model</h2>
+<div class="card"><table><thead><tr><th>Setting</th><th>Value</th></tr></thead><tbody><tr><td class="">Base model</td><td class=""><code>Qwen/Qwen3-0.6B-Base</code> (Apache-2.0)</td></tr><tr><td class="">Architecture</td><td class="">decoder-only transformer, 28 layers, hidden size 1024, MLP 3072, attention 16 query / 8 key-value heads, vocabulary 151,936</td></tr><tr><td class="">Head</td><td class="">linear 1024 → 78 on the last real token</td></tr><tr><td class="">Method</td><td class="">full fine-tuning (all weights)</td></tr><tr><td class="">Parameters trained</td><td class="">596,129,792</td></tr><tr><td class="">Serving size</td><td class="">1.19 GB (bf16 safetensors)</td></tr></tbody></table></div>
+
+<h2>Training</h2>
+<div class="card"><table><thead><tr><th>Setting</th><th>Value</th></tr></thead><tbody><tr><td class="">Optimizer</td><td class="">AdamW, learning rate 2e-05, weight decay 0.01, warm-up 6%, cosine decay</td></tr><tr><td class="">Epochs / steps</td><td class="">3 epochs, 5,625 optimizer steps (1,875 per epoch)</td></tr><tr><td class="">Batch</td><td class="">4 × 8 gradient accumulation = 32</td></tr><tr><td class="">Regularisation</td><td class="">label smoothing 0.1, gradient clipping 1.0</td></tr><tr><td class="">Max length</td><td class="">512 tokens per provision</td></tr><tr><td class="">Checkpoint selection</td><td class="">best validation accuracy; early stopping patience 4</td></tr><tr><td class="">Compute</td><td class="">a single laptop with 48 GB of memory, built-in GPU via PyTorch (mps); 9.96 h; 25M tokens; peak memory 30 GB</td></tr></tbody></table></div>
+<img src="assets/transformer_loss.png" alt="Training loss and learning rate">
+<h3>Validation during training</h3>
+<img src="assets/transformer_validation.png" alt="Validation accuracy, top-3 and macro-F1">
+<img src="assets/transformer_validation_loss.png" alt="Validation loss">
+<table><thead><tr><th>Step</th><th>Epoch</th><th>Accuracy</th><th>Top-3</th><th>Macro-F1</th><th>Loss</th></tr></thead><tbody><tr><td class="n">500</td><td class="n">0.27</td><td class="n">85.50%</td><td class="n">94.57%</td><td class="n">80.00%</td><td class="n">0.6728</td></tr><tr><td class="n">1000</td><td class="n">0.53</td><td class="n">88.57%</td><td class="n">96.33%</td><td class="n">85.03%</td><td class="n">0.5287</td></tr><tr><td class="n">1500</td><td class="n">0.80</td><td class="n">88.93%</td><td class="n">96.77%</td><td class="n">85.11%</td><td class="n">0.5187</td></tr><tr><td class="n">2000</td><td class="n">1.07</td><td class="n">90.13%</td><td class="n">96.97%</td><td class="n">87.08%</td><td class="n">0.4765</td></tr><tr><td class="n">2500</td><td class="n">1.33</td><td class="n">90.60%</td><td class="n">97.53%</td><td class="n">87.32%</td><td class="n">0.4596</td></tr><tr><td class="n">3000</td><td class="n">1.60</td><td class="n">91.30%</td><td class="n">97.30%</td><td class="n">88.28%</td><td class="n">0.4419</td></tr><tr><td class="n">3500</td><td class="n">1.87</td><td class="n">91.50%</td><td class="n">97.50%</td><td class="n">88.63%</td><td class="n">0.4215</td></tr><tr><td class="n">4000</td><td class="n">2.13</td><td class="n">92.10%</td><td class="n">97.60%</td><td class="n">89.64%</td><td class="n">0.4161</td></tr><tr><td class="n">4500</td><td class="n">2.40</td><td class="n">92.00%</td><td class="n">97.60%</td><td class="n">89.61%</td><td class="n">0.4126</td></tr><tr><td class="n">5000</td><td class="n">2.67</td><td class="n">92.17%</td><td class="n">97.57%</td><td class="n">89.77%</td><td class="n">0.4148</td></tr><tr><td class="n">5500</td><td class="n">2.93</td><td class="n">92.23%</td><td class="n">97.57%</td><td class="n">89.88%</td><td class="n">0.4109</td></tr><tr><td class="n">5625</td><td class="n">3.00</td><td class="n">92.23%</td><td class="n">97.57%</td><td class="n">89.88%</td><td class="n">0.4109</td></tr></tbody></table>
+
+<h2>Test results (full 10,000-provision test split)</h2>
+<div class="card"><table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody><tr><td class="">Accuracy</td><td class="">92.46%</td></tr><tr><td class="">Top-3 accuracy</td><td class="">97.69%</td></tr><tr><td class="">Micro / macro / weighted F1</td><td class="">92.46% / 89.67% / 92.24%</td></tr><tr><td class="">Log loss (calibrated)</td><td class="">0.3644</td></tr><tr><td class="">Calibration error</td><td class="">7.0% before, 2.2% after temperature 0.804</td></tr></tbody></table></div>
+<img src="assets/transformer_per_class_f1.png" alt="Per-class F1">
+<h3>Most frequent confusions</h3>
+<table><thead><tr><th>True clause type</th><th>Predicted as</th><th>Count</th></tr></thead><tbody><tr><td class="">Taxes</td><td class="">Withholdings</td><td class="n">21</td></tr><tr><td class="">Representations and Warranties</td><td class="">Survival</td><td class="n">13</td></tr><tr><td class="">Assignments</td><td class="">Successors and Assigns</td><td class="n">13</td></tr><tr><td class="">General</td><td class="">Payments</td><td class="n">12</td></tr><tr><td class="">Amendments</td><td class="">Entire Agreements</td><td class="n">10</td></tr><tr><td class="">Benefits</td><td class="">Successors and Assigns</td><td class="n">9</td></tr><tr><td class="">Enforceability</td><td class="">Severability</td><td class="n">9</td></tr><tr><td class="">Miscellaneous</td><td class="">Entire Agreements</td><td class="n">9</td></tr><tr><td class="">Venues</td><td class="">Governing Laws</td><td class="n">8</td></tr><tr><td class="">Successors and Assigns</td><td class="">Assignments</td><td class="n">8</td></tr><tr><td class="">Jurisdiction</td><td class="">Governing Laws</td><td class="n">8</td></tr><tr><td class="">Successors and Assigns</td><td class="">Effectiveness</td><td class="n">7</td></tr><tr><td class="">Expenses</td><td class="">Fees</td><td class="n">7</td></tr><tr><td class="">General</td><td class="">Terminations</td><td class="n">7</td></tr><tr><td class="">Governing Laws</td><td class="">Compliance With Laws</td><td class="n">6</td></tr><tr><td class="">Terminations</td><td class="">Terms</td><td class="n">6</td></tr><tr><td class="">Venues</td><td class="">Jurisdiction</td><td class="n">6</td></tr><tr><td class="">General</td><td class="">Vesting</td><td class="n">6</td></tr><tr><td class="">Construction</td><td class="">Severability</td><td class="n">6</td></tr><tr><td class="">Disclosures</td><td class="">Confidentiality</td><td class="n">5</td></tr></tbody></table>
+
+<h2>Versions</h2>
+<table><thead><tr><th>Model</th><th>Version</th><th>Created</th><th>Val acc</th><th>Test acc</th><th>Test top-3</th><th>Test macro-F1</th></tr></thead><tbody><tr><td class=""><code>ledgar-qwen3-0.6b-v1</code></td><td class="">1</td><td class="">2026-10-11 15:12</td><td class="n">92.23%</td><td class="n">92.46%</td><td class="n">97.69%</td><td class="n">89.67%</td></tr></tbody></table>
+<h2>Training in motion</h2>
+<p>Recorded from this run: <a href="../../demo/ledgar-qwen3-0.6b-v1_training.gif">training charts GIF</a>,
+<a href="../../demo/ledgar-qwen3-0.6b-v1_terminal.gif">terminal dashboard GIF</a>, <a href="../../demo/playground_usage.gif">playground GIF</a>.</p>
+
+<footer>Generated 2026-10-11 22:34 by <code>scripts/10_model_pages.py</code> from the saved model artifacts. Regenerate with <code>make model-pages</code>.</footer>
+</main></body></html>

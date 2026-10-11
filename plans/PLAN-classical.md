@@ -1,6 +1,6 @@
 # Plan: classical model, side-by-side playground, and model pages
 
-(Approved 2026-10-11. The earlier transformer plan is `plans/PLAN.md`.)
+(Approved 2026-10-11. **Status: implemented 2026-10-11** — `ledgar-tfidf-lr-v1` trained and evaluated (test 90.88%), `/v1/compare`, playground compare mode and `docs/models/` pages done; transformer v1 files verified unchanged by checksum. The earlier transformer plan is `plans/PLAN.md`.)
 
 ## Context
 
