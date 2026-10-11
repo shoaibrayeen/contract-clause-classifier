@@ -16,7 +16,7 @@
 #     optimizer state 6.7 GB, merged 1.1 GB).
 
 model_name: Qwen/Qwen3-0.6B-Base
-model_version: 1            # next model version to train -> artifacts/runs/<train.run_name>-v<N>; bumped automatically after `make all`
+model_version: 2            # next model version to train -> artifacts/runs/<train.run_name>-v<N>; bumped automatically after `make all`
 full_finetune: true         # train all 596M weights (best accuracy, ~25 GB); false = LoRA adapters only (~19 GB, ~1-2 pts lower)
 device: auto
 precision: auto             # autocast dtype: auto (bf16 on cuda, fp32 on mps/cpu) | bf16 | fp16 | fp32
