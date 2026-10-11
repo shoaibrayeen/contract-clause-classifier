@@ -8,7 +8,7 @@
 #   complement naive bayes     83.76%  (fit 2 s)
 # Logistic regression is served for its calibrated probabilities and per-class phrase weights.
 
-model_version: 2                 # next classical version -> artifacts/classical/runs/<run_name>-v<N>; bumped by `make classical`
+model_version: 3                 # next classical version -> artifacts/classical/runs/<run_name>-v<N>; bumped by `make classical`
 run_name: ledgar-tfidf-lr
 output_dir: artifacts/classical/runs
 seed: 42

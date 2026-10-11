@@ -1,6 +1,6 @@
 {
   "transformer": "ledgar-qwen3-0.6b-v1",
-  "classical": "ledgar-tfidf-lr-v1",
+  "classical": "ledgar-tfidf-lr-v2",
   "agreement": {
     "n": 10000,
     "agree_rate": 0.942,
@@ -94,8 +94,8 @@
     "Agreements": 0.12906164591557856
   },
   "latency_ms_cpu": {
-    "transformer": 103.3220937490114,
-    "classical": 0.9235585402348079
+    "transformer": 102.0741573011037,
+    "classical": 0.7977091701468453
   },
   "transformer_wins": 53,
   "classical_wins": 11

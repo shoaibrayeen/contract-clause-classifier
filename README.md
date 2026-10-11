@@ -8,10 +8,10 @@ Two models, same data, same 10,000-provision LEDGAR test set:
 
 | Model | Type | Test accuracy | Top-3 | Training | Per provision (CPU) |
 |---|---|---|---|---|---|
-| **`ledgar-qwen3-0.6b-v1`** | fine-tuned transformer (default) | **92.46%** | 97.69% | 10 h on a laptop GPU | 103 ms |
-| **`ledgar-tfidf-lr-v1`** | classical: TF-IDF + logistic regression | **90.88%** | 97.33% | 24 min on CPU | 0.9 ms |
+| **`ledgar-qwen3-0.6b-v1`** | fine-tuned transformer (default) | **92.46%** | 97.69% | 10 h on a laptop GPU | 102 ms |
+| **`ledgar-tfidf-lr-v2`** | classical: TF-IDF + logistic regression | **90.88%** | 97.33% | 23 min on CPU | 0.8 ms |
 
-They agree on 94.2% of test provisions, and when they agree they are right 94.9% of the time. Details: [Transformer vs classical](#transformer-vs-classical) and the generated model pages ([compare](docs/models/compare.html), [transformer](docs/models/transformer.html), [classical](docs/models/classical.html)).
+Per-provision times are measured on a CPU by `make model-pages`. The classical model has two versions, v1 and v2, with identical results (see [Classical model](#classical-model)). The transformer and the classical model agree on 94.2% of test provisions, and when they agree they are right 94.9% of the time. Details: [Transformer vs classical](#transformer-vs-classical) and the generated model pages ([compare](docs/models/compare.html), [transformer](docs/models/transformer.html), [classical](docs/models/classical.html)).
 
 ### How v1 was trained
 
@@ -341,11 +341,18 @@ make all-classical             # alias
 | Train | `make classical-train` | TF-IDF features (word 1-2 grams + character 3-5 grams, 253,103 features) fitted once on the training split; logistic regression for C in {3, 10, 30}, the best by validation accuracy is served; linear SVM and Complement Naive Bayes trained on the same features for comparison; learning curve on 10/25/50/100% of the data |
 | Evaluate | `make classical-evaluate` | temperature calibration on validation, full test report (same format as the transformer), CPU latency, test predictions for the comparison |
 | Pages | `make model-pages` | regenerates `docs/models/{compare,transformer,classical}.html` |
-| Bump | `make classical-bump` | raises `model_version` in `configs/classical/ledgar_tfidf_lr.yaml` (next run: `ledgar-tfidf-lr-v2`) |
+| Bump | `make classical-bump` | raises `model_version` in `configs/classical/ledgar_tfidf_lr.yaml` (after v1 and v2 the next run is `ledgar-tfidf-lr-v3`) |
 
-Versions follow the same rules as the transformer: every run is a new `ledgar-tfidf-lr-v<N>`, nothing is overwritten, and `make models` lists both families.
+Versions follow the same rules as the transformer: every run is a new `ledgar-tfidf-lr-v<N>`, nothing is overwritten, and `make models` lists both families. Requests for `latest-classical`, the playground's compare mode and the model pages use the newest classical version.
 
-Measured for `ledgar-tfidf-lr-v1`:
+| Version | Trained | Test accuracy | Top-3 | Macro-F1 | Train time | Status |
+|---|---|---|---|---|---|---|
+| `ledgar-tfidf-lr-v1` | 2026-10-11 | 90.88% | 97.33% | 88.24% | 1,441 s | kept, selectable by id |
+| `ledgar-tfidf-lr-v2` | 2026-10-11 | 90.88% | 97.33% | 88.24% | 1,391 s | **latest classical** |
+
+v2 was trained with the same settings as v1 and reproduces it exactly: every validation, learning-curve and test number matches, and only the timings differ. Training is deterministic (fixed `seed`, deterministic solvers), so a new classical version changes results only when the config or the data changes.
+
+Measured for `ledgar-tfidf-lr-v2` (identical for v1):
 
 | Candidate (validation split, 10,000 rows) | Accuracy | Top-3 | Macro-F1 | Log loss | Fit |
 |---|---|---|---|---|---|
@@ -366,15 +373,15 @@ On the test split: **90.88% accuracy, 97.33% top-3, 88.24% macro-F1, 1.9% calibr
 
 Every number below is from the same 10,000-provision test split ([full comparison page](docs/models/compare.html)).
 
-| | Transformer `ledgar-qwen3-0.6b-v1` | Classical `ledgar-tfidf-lr-v1` |
+| | Transformer `ledgar-qwen3-0.6b-v1` | Classical `ledgar-tfidf-lr-v2` |
 |---|---|---|
 | Accuracy | **92.46%** | 90.88% |
 | Top-3 accuracy | **97.69%** | 97.33% |
 | Macro-F1 | **89.67%** | 88.24% |
 | Calibration error | 2.2% | **1.9%** |
 | Clause types where it has higher F1 (by more than 0.5 points) | **53** | 11 |
-| Training | 10 h, laptop GPU | **24 min, CPU** |
-| Per provision on a CPU | 103 ms | **0.9 ms** |
+| Training | 10 h, laptop GPU | **23 min, CPU** |
+| Per provision on a CPU | 102 ms | **0.8 ms** |
 | Size | 1.2 GB | **145 MB** |
 | Explainability | none built in | **weighted phrases per clause type** |
 
@@ -584,13 +591,13 @@ curl -s localhost:8000/health
   "model": "ledgar-qwen3-0.6b-v1",
   "latest_model": "ledgar-qwen3-0.6b-v1",
   "latest_version": 1,
-  "latest_classical": "ledgar-tfidf-lr-v1",
-  "available_models": ["ledgar-qwen3-0.6b-v1", "ledgar-tfidf-lr-v1"],
-  "loaded_models": ["ledgar-qwen3-0.6b-v1", "ledgar-tfidf-lr-v1"],
+  "latest_classical": "ledgar-tfidf-lr-v2",
+  "available_models": ["ledgar-qwen3-0.6b-v1", "ledgar-tfidf-lr-v1", "ledgar-tfidf-lr-v2"],
+  "loaded_models": ["ledgar-qwen3-0.6b-v1", "ledgar-tfidf-lr-v2"],
   "models_dir": "contract-clause-classifier/artifacts/runs",
   "device": "mps",
   "num_labels": 78,
-  "uptime_s": 3.296,
+  "uptime_s": 10.524,
   "version": "1.0.0",
   "detail": null
 }
@@ -634,9 +641,16 @@ curl -s localhost:8000/v1/models/latest-classical
   "object": "list",
   "data": [
     {
+      "id": "ledgar-tfidf-lr-v2", "object": "model", "created": 1791740776, "owned_by": "local",
+      "version": 2, "family": "classical", "is_latest": false, "base_name": "ledgar-tfidf-lr", "base_model": null,
+      "loaded": true,
+      "metrics": {"best_val_accuracy": 0.9138, "best_val_macro_f1": 0.884, "test_accuracy": 0.9088,
+                  "test_top3_accuracy": 0.9733, "test_macro_f1": 0.8824}
+    },
+    {
       "id": "ledgar-tfidf-lr-v1", "object": "model", "created": 1791737464, "owned_by": "local",
       "version": 1, "family": "classical", "is_latest": false, "base_name": "ledgar-tfidf-lr", "base_model": null,
-      "loaded": true,
+      "loaded": false,
       "metrics": {"best_val_accuracy": 0.9138, "best_val_macro_f1": 0.884, "test_accuracy": 0.9088,
                   "test_top3_accuracy": 0.9733, "test_macro_f1": 0.8824}
     },
@@ -784,7 +798,7 @@ curl -s localhost:8000/v1/compare -H "Content-Type: application/json" -d '{
 }'
 ```
 
-The text is split into provisions once and every model scores the same list, so clause indexes line up. Response (clause texts shortened):
+The text is split into provisions once and every model scores the same list, so clause indexes line up. Response from a warm server on an Apple GPU (clause texts shortened; the first request after startup is slower while models load):
 
 ```json
 {
@@ -792,7 +806,7 @@ The text is split into provisions once and every model scores the same list, so 
   "num_clauses": 2,
   "models": [
     {
-      "id": "ledgar-qwen3-0.6b-v1", "family": "transformer", "version": 1, "latency_ms": 190.2,
+      "id": "ledgar-qwen3-0.6b-v1", "family": "transformer", "version": 1, "latency_ms": 34.3,
       "document": [{"name": "Governing Laws", "confidence": 0.9699}, {"name": "Intellectual Property", "confidence": 0.5844},
                    {"name": "Indemnifications", "confidence": 0.3598}],
       "clauses": [
@@ -803,7 +817,7 @@ The text is split into provisions once and every model scores the same list, so 
       ]
     },
     {
-      "id": "ledgar-tfidf-lr-v1", "family": "classical", "version": 1, "latency_ms": 4.9,
+      "id": "ledgar-tfidf-lr-v2", "family": "classical", "version": 2, "latency_ms": 1.3,
       "document": [{"name": "Governing Laws", "confidence": 1.0}, {"name": "Indemnifications", "confidence": 0.9978}],
       "clauses": [
         {"index": 0, "text": "1. Indemnification. Provider shall indemnify, defend and hold harmless ...",
@@ -1016,7 +1030,7 @@ Classical model settings live in [configs/classical/ledgar_tfidf_lr.yaml](config
 
 | Key | Default | Meaning |
 |---|---|---|
-| `model_version` | `1` | next classical version (`ledgar-tfidf-lr-v<N>`); bumped by `make classical` |
+| `model_version` | `3` | next classical version (`ledgar-tfidf-lr-v<N>`); bumped by `make classical` after a successful run |
 | `features.word` / `features.char` | 1-2 grams, min_df 2 / 3-5 grams, min_df 3, max 300,000 each | TF-IDF feature blocks |
 | `logistic_regression.C_grid` | `[3, 10, 30]` | served model; C picked by validation accuracy |
 | `linear_svm` / `complement_nb` | enabled | comparison candidates (reported, not served) |
