@@ -419,6 +419,8 @@ Sample output for the `--text` call:
 make serve          # then open http://localhost:8000/playground
 ```
 
+![Using the playground with ledgar-qwen3-0.6b-v1](demo/playground_usage.gif)
+
 A single page served by the API (no extra dependencies). Paste a clause or a whole contract, or load one of the samples, pick a model version (the latest is preselected), adjust top-k and the confidence threshold, and press **Classify** (or Ctrl/Cmd + Enter). It shows:
 
 * **Clause types found**: every clause type detected in the input, with a confidence bar.
@@ -426,6 +428,14 @@ A single page served by the API (no extra dependencies). Paste a clause or a who
 * The model version that answered, latency, token count, and the raw API response.
 
 The status pill shows the latest model and device. Before any model is trained it explains how to train one. If the server has an `API_KEY`, the page asks for it. `http://localhost:8000/` redirects to the playground.
+
+The GIF above is a real session with `ledgar-qwen3-0.6b-v1`. Re-record it after training a new version with:
+
+```bash
+make playground-gif        # drives headless Chrome through the playground -> demo/playground_usage.gif
+```
+
+It starts the API if none is running, needs Google Chrome or Chromium (set `CHROME=/path/to/chrome` if it is elsewhere), and takes about 10 seconds. Note what the recording shows: the IP-infringement indemnity in the sample contract is labelled Intellectual Property at 65%, shown in amber as uncertain, because its wording is about IP rights.
 
 ---
 
@@ -780,9 +790,9 @@ contract-clause-classifier/
 │   ├── io_utils.py             read txt / pdf / docx
 │   ├── predict.py              Predictor: provisions -> [{name, confidence}]
 │   └── api/                    FastAPI app, multi-version model store, OpenAI schemas, routes, playground page
-├── scripts/                    01_prepare_data … 06_render_gif, 07_models (versions)
+├── scripts/                    01_prepare_data … 06_render_gif, 07_models (versions), 08_record_playground
 ├── tests/                      pytest suite (stub model; no download or GPU needed)
-├── demo/                       sample contract, telemetry GIF and final frame
+├── demo/                       sample contract, training GIFs, playground usage GIF
 ├── docs/TELEMETRY.md           telemetry file schema
 ├── plans/PLAN.md               approved design plan
 ├── Dockerfile, docker-compose.yml, .env.example
@@ -835,7 +845,7 @@ Everything lives in [configs/ledgar_qwen3_0.6b.yaml](configs/ledgar_qwen3_0.6b.y
 make test
 ```
 
-72 tests cover segmentation, label grouping, data paging and batching, model versioning (naming, never-overwrite, resume and restart, bumping, latest selection), multi-version serving and model selection, the dashboard fitting the terminal, the prediction output format, every API route and error case, the playground, API-key auth, the OpenAPI schema, compatibility with the official OpenAI Python SDK, and that every AI assistant's rules file matches `AGENTS.md`. They use a keyword-based stub model, so they run in seconds with no download or GPU.
+74 tests cover segmentation, label grouping, data paging and batching, model versioning (naming, never-overwrite, resume and restart, bumping, latest selection), multi-version serving and model selection, the dashboard fitting the terminal, the prediction output format, every API route and error case, the playground, API-key auth, the OpenAPI schema, compatibility with the official OpenAI Python SDK, and that every AI assistant's rules file matches `AGENTS.md`. They use a keyword-based stub model, so they run in seconds with no download or GPU.
 
 ---
 

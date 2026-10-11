@@ -11,7 +11,7 @@ UV     ?= uv
 CAFFEINATE := $(shell command -v caffeinate >/dev/null 2>&1 && echo "caffeinate -i")
 
 .DEFAULT_GOAL := help
-.PHONY: help setup data train resume restart finish evaluate gif bump models next adopt sanity predict serve test rules \
+.PHONY: help setup data train resume restart finish evaluate gif bump models next adopt sanity predict serve playground-gif test rules \
         docker-build docker-up docker-down all clean-runs
 
 help: ## Show this help
@@ -72,6 +72,9 @@ predict: ## Classify a file: make predict FILE=contract.pdf [MODEL=ledgar-qwen3-
 serve: ## API + playground on http://localhost:$(PORT)/playground (serves every version; default = latest)
 	@echo "Playground: http://localhost:$(PORT)/playground   API docs: http://localhost:$(PORT)/docs"
 	$(UV) run python scripts/05_serve.py --port $(PORT)
+
+playground-gif: ## Record demo/playground_usage.gif of the playground with the latest model (needs Chrome)
+	$(UV) run python scripts/08_record_playground.py --port $(PORT)
 
 test: ## Run the test suite (no trained model needed)
 	$(UV) run pytest -q

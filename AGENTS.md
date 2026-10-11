@@ -62,6 +62,7 @@ make models / make next                   # list versions / show the next versio
 make evaluate MODEL=latest                # calibrate + test metrics (any version id)
 make gif MODEL=latest                     # render a version's telemetry to GIF
 make serve                                # API + playground on :8000 (/playground)
+make playground-gif                       # re-record demo/playground_usage.gif (needs Chrome + a trained model)
 uv run python scripts/04_predict.py --text "..."   # one-off prediction
 ```
 

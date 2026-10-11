@@ -28,7 +28,9 @@ def sparkline(values, width: int = 40) -> str:
 
 
 class TrainingDashboard:
-    def __init__(self, console: Console, total_steps: int, start_step: int, label_names: list[str], run_dir: str):
+    def __init__(self, console: Console, total_steps: int, start_step: int, label_names: list[str], run_dir: str,
+                 get_time=None):
+        """`get_time` replaces the wall clock for elapsed/ETA (used to replay a finished run from telemetry)."""
         self.console = console
         self.interactive = console.is_terminal
         self.label_names = label_names
@@ -37,6 +39,7 @@ class TrainingDashboard:
         self.progress = Progress(
             TextColumn("[bold]{task.description}"), BarColumn(), MofNCompleteColumn(),
             TextColumn("{task.fields[status]}"), TimeElapsedColumn(), TimeRemainingColumn(), console=console,
+            get_time=get_time,
         )
         self.task = self.progress.add_task("train", total=total_steps, completed=start_step, status="")
         self.losses: deque[float] = deque(maxlen=200)

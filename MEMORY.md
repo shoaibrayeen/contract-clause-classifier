@@ -73,6 +73,8 @@ Project memory: decisions, measurements and gotchas that are not obvious from th
 
 ## Gotchas
 
+- Recording the playground: `scripts/08_record_playground.py` drives headless Chrome through the DevTools protocol with the `websockets` package that uvicorn[standard] already installs (17.2, locked), and Pillow; no new dependency. A full recording takes ~10 s. The v1 session labels the sample's IP-infringement indemnity as Intellectual Property at 0.65 (wording-driven); kept in the GIF and noted in the README rather than hidden. (2026-10-11)
+
 - **LEDGAR's 100 labels lack common commercial clause types:** Limitation of Liability, Force Majeure, Non-Compete, Non-Solicitation, Audit Rights, Exclusivity, Most Favored Nation, Warranty Disclaimer, Liquidated Damages (also Services, Delivery, Price). The model maps them to the nearest known type; on demo/sample_contract.txt a Limitation of Liability section came back as Indemnifications at 0.72, a services clause as Payments at 0.20 and the preamble as Releases at 0.51. Documented in the README; covering them needs new labelled data. (2026-10-11)
 
 - Changing `configs/ledgar_label_groups.yaml` changes the label space of *new* models only; evaluating an older model needs its saved `label_space.json` (now written automatically). The sanity model trained before this fix had the file reconstructed by hand. (2026-10-11)
