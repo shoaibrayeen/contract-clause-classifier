@@ -21,7 +21,7 @@ Give it a contract (text, PDF or DOCX). It splits the contract into provisions, 
 
 Training runs on **any machine** (Apple Silicon MPS, NVIDIA CUDA or CPU, auto-detected). While it trains, a **live dashboard** prints in the terminal and **every step is recorded** to disk so the run can be replayed as charts, a GIF or a video later. Every training run produces a new **model version** (`ledgar-qwen3-0.6b-v1`, `-v2`, …) and no model is ever overwritten. The API serves all versions, defaults to the latest, and includes a browser **playground**.
 
-![Sanity-run telemetry rendered as a GIF](demo/sanity_training.gif)
+![Training of ledgar-qwen3-0.6b-v1 rendered from its telemetry](demo/ledgar-qwen3-0.6b-v1_training.gif)
 
 ---
 
@@ -112,6 +112,8 @@ Browse the data yourself with `make data` and then `GET /v1/dataset?split=train&
 
 **What the model does not learn from this data.** LEDGAR labels one clause type per provision and contains no annotation of risk, parties, dates or obligations. Multi-label output for a whole contract comes from splitting it into provisions. Provisions written in styles far from SEC-filed commercial contracts (consumer terms, non-English text) will be classified less reliably.
 
+**Clause types missing from LEDGAR.** The 100 labels are the most frequent SEC section headings, so several clauses common in commercial contracts are not among them: **Limitation of Liability, Force Majeure, Non-Compete, Non-Solicitation, Audit Rights, Exclusivity, Most Favored Nation, Warranty Disclaimer, Liquidated Damages** (and "Services", "Delivery", "Price"). The model cannot output these; it returns the closest type it knows, usually with lower confidence. For example, on `demo/sample_contract.txt` a Limitation of Liability section comes back as Indemnifications at 72%, a services description as Payments at 20%, and the preamble as Releases at 51%. Treat predictions below about 80% as uncertain. Covering these types needs labelled examples of them added to the training data.
+
 
 ### Label grouping: 100 labels become 78 clause types
 
@@ -160,13 +162,13 @@ The target for this project is 96 to 99% accuracy. Here is what the evidence sup
 | First run here: LoRA r=16, 100 labels, half an epoch | 83.0% | measured |
 | Same checkpoint scored on the 78 merged clause types | 88.9% | measured |
 | Independent TF-IDF baseline, full validation split: 100 labels / 78 clause types | 87.8% / 91.2% | measured |
-| Default config: 78 clause types, full fine-tune, 3 epochs | **expected about 92 to 95%** | estimate: a fully trained model on 100 labels reaches about 88%; the merge adds 3 to 6 points; full fine-tuning 1 to 2 |
-| Top-3 accuracy (right clause among the three suggestions) | expected 98% or more | reported by `make evaluate` |
+| **`ledgar-qwen3-0.6b-v1`: default config (78 clause types, full fine-tune, 3 epochs), full 10,000-row test split** | **92.46% top-1, 97.69% top-3, macro-F1 89.7%** | measured by `make evaluate` |
+| Calibration error after temperature scaling (test) | 2.2% (7.0% before) | measured; temperature 0.80 fitted on the 10,000-row validation split |
 
-So 96% top-1 is above what this data supports without further merging, and 99% top-1 is not reachable on LEDGAR. The remaining errors are mostly clause types that are legally distinct but written alike, such as Term vs Termination, Survival vs Warranties, or Enforceability vs Successors and Assigns. The levers that would go further:
+The v1 result is 4.5 points above the published 100-label state of the art and in the expected range. 96% top-1 is above what this data supports without further merging, and 99% top-1 is not reachable on LEDGAR. The remaining errors are mostly clause types that are legally distinct but written alike. v1's most frequent test confusions: Taxes vs Withholdings (21), Representations and Warranties vs Survival (13), Assignments vs Successors and Assigns (13), General vs Payments (12), Amendments vs Entire Agreements (10). Weakest classes by F1: Venues (0.43, 20 test rows), Powers (0.58), Miscellaneous (0.58), Enforceability (0.62), Enforcements (0.63). The levers that would go further:
 
 1. **Merge more clause types** that you consider the same for your use case (edit the groups file; no re-tokenising needed). Groups rejected on legal grounds are listed in the file; merging them would add 2 to 3 points at the cost of legal precision.
-2. **Use the top-3 output**: the API already returns the top-k labels with calibrated confidences, and top-3 accuracy is expected at 98% or more.
+2. **Use the top-3 output**: the API already returns the top-k labels with calibrated confidences, and v1's top-3 accuracy is 97.7%.
 3. **Train on your own labelled contracts** with your own taxonomy. Consistent labels are the single biggest factor; a cleanly labelled in-house set routinely reaches 97 to 99% with this model size.
 4. **A larger backbone** (for example Qwen3-1.7B) typically adds 1 to 2 points at three times the training time.
 
@@ -269,17 +271,16 @@ make predict FILE=contract.pdf MODEL=ledgar-qwen3-0.6b-v1
 make adopt RUN=ledgar-qwen3-0.6b-lora       # turn a finished unversioned run into the next version
 ```
 
-Sample `make models` output:
+Sample `make models` output (after the first run):
 
 ```text
-                               Models in contract-clause-classifier/artifacts/runs
+                                       Models in contract-clause-classifier/artifacts/runs
 ┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━┓
 ┃ model                ┃ version ┃ created          ┃ val acc ┃ val macro-F1 ┃ test acc ┃ test top-3 ┃ test macro-F1 ┃        ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━┩
-│ ledgar-qwen3-0.6b-v1 │ 1       │ 2026-10-12 06:10 │ ...     │ ...          │ ...      │ ...        │ ...           │        │
-│ ledgar-qwen3-0.6b-v2 │ 2       │ 2026-10-14 07:42 │ ...     │ ...          │ ...      │ ...        │ ...           │ latest │
+│ ledgar-qwen3-0.6b-v1 │ 1       │ 2026-10-11 15:12 │ 0.9223  │ 0.8988       │ 0.9246   │ 0.9769     │ 0.8967        │ latest │
 └──────────────────────┴─────────┴──────────────────┴─────────┴──────────────┴──────────┴────────────┴───────────────┴────────┘
-Next training run: model_version=3 in contract-clause-classifier/configs/ledgar_qwen3_0.6b.yaml
+Next training run: model_version=2 in contract-clause-classifier/configs/ledgar_qwen3_0.6b.yaml
 ```
 
 Each version's `merged/model_info.json` records its id, version, creation time, base model, method, label count, best validation scores and, after `make evaluate`, its test scores.
@@ -391,14 +392,14 @@ Sample output for the `--text` call:
 ```json
 {
   "document": [
-    {"name": "Governing Laws", "confidence": 0.8069}
+    {"name": "Governing Laws", "confidence": 0.9748}
   ],
   "clauses": [
     {
       "index": 0,
       "text": "This Agreement shall be governed by the laws of New York.",
       "predictions": [
-        {"name": "Governing Laws", "confidence": 0.8069}
+        {"name": "Governing Laws", "confidence": 0.9748}
       ]
     }
   ],
@@ -408,7 +409,7 @@ Sample output for the `--text` call:
 
 `document` lists every clause type found anywhere in the input with its best confidence, highest first. `clauses` gives the top-k predictions per provision (the top-1 is always kept, the rest only above the threshold). A provision the model is unsure about can therefore appear in `clauses` with a low-confidence top-1 while adding nothing to `document`.
 
-> All sample outputs in this README come from the 5-minute `make sanity` model, so the confidences are modest. A full `make train` run produces much sharper predictions.
+> All sample outputs in this README are real responses from `ledgar-qwen3-0.6b-v1`, the first fully trained model (92.5% test accuracy).
 
 ---
 
@@ -458,19 +459,21 @@ curl -s localhost:8000/health
 {
   "status": "ok",
   "model_loaded": true,
-  "model": "ledgar-qwen3-0.6b-v2",
-  "latest_model": "ledgar-qwen3-0.6b-v2",
-  "latest_version": 2,
-  "available_models": ["ledgar-qwen3-0.6b-v1", "ledgar-qwen3-0.6b-v2"],
-  "loaded_models": ["ledgar-qwen3-0.6b-v2"],
+  "model": "ledgar-qwen3-0.6b-v1",
+  "latest_model": "ledgar-qwen3-0.6b-v1",
+  "latest_version": 1,
+  "available_models": ["ledgar-qwen3-0.6b-v1"],
+  "loaded_models": ["ledgar-qwen3-0.6b-v1"],
   "models_dir": "contract-clause-classifier/artifacts/runs",
   "device": "mps",
   "num_labels": 78,
-  "uptime_s": 2.253,
+  "uptime_s": 3.414,
   "version": "0.1.0",
   "detail": null
 }
 ```
+
+With more versions trained, `available_models` lists them all and `latest_model` is the newest.
 
 `503` before any model is trained (the dataset endpoints and the playground keep working):
 
@@ -507,26 +510,22 @@ curl -s localhost:8000/v1/models/ledgar-qwen3-0.6b-v1
   "object": "list",
   "data": [
     {
-      "id": "ledgar-qwen3-0.6b-v2", "object": "model", "created": 1791850000, "owned_by": "local",
-      "version": 2, "is_latest": true, "base_name": "ledgar-qwen3-0.6b", "base_model": "Qwen/Qwen3-0.6B-Base",
+      "id": "ledgar-qwen3-0.6b-v1", "object": "model", "created": 1791711723, "owned_by": "local",
+      "version": 1, "is_latest": true, "base_name": "ledgar-qwen3-0.6b", "base_model": "Qwen/Qwen3-0.6B-Base",
       "loaded": true,
-      "metrics": {"best_val_accuracy": 0.95, "best_val_macro_f1": 0.91, "test_accuracy": 0.94, "test_top3_accuracy": 0.98, "test_macro_f1": 0.9}
-    },
-    {
-      "id": "ledgar-qwen3-0.6b-v1", "object": "model", "created": 1791660000, "owned_by": "local",
-      "version": 1, "is_latest": false, "base_name": "ledgar-qwen3-0.6b", "base_model": "Qwen/Qwen3-0.6B-Base",
-      "loaded": false, "metrics": {"best_val_accuracy": 0.93, "best_val_macro_f1": 0.89}
+      "metrics": {"best_val_accuracy": 0.9223, "best_val_macro_f1": 0.8988, "test_accuracy": 0.9246,
+                  "test_top3_accuracy": 0.9769, "test_macro_f1": 0.8967}
     }
   ]
 }
 ```
 
-The `metrics` values above are illustrative; yours come from your runs. The non-standard fields (`version`, `is_latest`, …) are ignored by OpenAI clients. An unknown id returns `404` in the OpenAI error format and lists what is available:
+Versions are listed newest first. The non-standard fields (`version`, `is_latest`, `metrics`, …) are ignored by OpenAI clients. An unknown id returns `404` in the OpenAI error format and lists what is available:
 
 ```json
 {
   "error": {
-    "message": "The model 'ledgar-qwen3-0.6b-v9' does not exist. Available: ledgar-qwen3-0.6b-v1, ledgar-qwen3-0.6b-v2 (or use 'latest', 'clause-classifier-qwen3-0.6b' for the latest).",
+    "message": "The model 'ledgar-qwen3-0.6b-v9' does not exist. Available: ledgar-qwen3-0.6b-v1 (or use 'latest', 'clause-classifier-qwen3-0.6b' for the latest).",
     "type": "not_found_error",
     "param": "model",
     "code": "model_not_found"
@@ -563,16 +562,16 @@ A standard `chat.completion` object. The predictions are the JSON string in `cho
 
 ```json
 {
-  "id": "chatcmpl-5f0b4683344349f48f47d5b4",
+  "id": "chatcmpl-04683661c8b64cbabc7dd10f",
   "object": "chat.completion",
-  "created": 1791666511,
-  "model": "ledgar-qwen3-0.6b-v2",
+  "created": 1791712609,
+  "model": "ledgar-qwen3-0.6b-v1",
   "choices": [
     {
       "index": 0,
       "message": {
         "role": "assistant",
-        "content": "{\"document\": [{\"name\": \"Governing Laws\", \"confidence\": 0.8069}], \"clauses\": [{\"index\": 0, \"text\": \"This Agreement shall be governed by the laws of New York.\", \"predictions\": [{\"name\": \"Governing Laws\", \"confidence\": 0.8069}]}], \"num_clauses\": 1}",
+        "content": "{\"document\": [{\"name\": \"Governing Laws\", \"confidence\": 0.9748}], \"clauses\": [{\"index\": 0, \"text\": \"This Agreement shall be governed by the laws of New York.\", \"predictions\": [{\"name\": \"Governing Laws\", \"confidence\": 0.9748}]}], \"num_clauses\": 1}",
         "refusal": null
       },
       "finish_reason": "stop",
@@ -580,7 +579,7 @@ A standard `chat.completion` object. The predictions are the JSON string in `cho
     }
   ],
   "usage": {"prompt_tokens": 12, "completion_tokens": 82, "total_tokens": 94},
-  "system_fingerprint": "fp_ledgar-qwen3-0.6b-v2"
+  "system_fingerprint": "fp_ledgar-qwen3-0.6b-v1"
 }
 ```
 
@@ -596,26 +595,36 @@ import json; print(json.dumps({"model": "latest", "top_k": 2, "threshold": 0.2,
 ```json
 {
   "document": [
-    {"name": "Governing Laws", "confidence": 0.5642},
-    {"name": "Counterparts", "confidence": 0.2466},
-    {"name": "Entire Agreements", "confidence": 0.1002}
+    {"name": "Terms", "confidence": 0.9863},
+    {"name": "Definitions", "confidence": 0.9827},
+    {"name": "Confidentiality", "confidence": 0.973},
+    {"name": "Governing Laws", "confidence": 0.9727},
+    {"name": "Counterparts", "confidence": 0.9726},
+    {"name": "Notices", "confidence": 0.9723},
+    {"name": "Assignments", "confidence": 0.9719},
+    {"name": "Entire Agreements", "confidence": 0.9696},
+    {"name": "Indemnifications", "confidence": 0.9379},
+    {"name": "Payments", "confidence": 0.8611},
+    {"name": "Releases", "confidence": 0.5127}
   ],
   "clauses": [
     {
       "index": 0,
       "text": "MASTER SERVICES AGREEMENT This Master Services Agreement (the \"Agreement\") is entered into as of March 1, 2025 ...",
-      "predictions": [{"name": "Survival", "confidence": 0.0358}]
+      "predictions": [{"name": "Releases", "confidence": 0.5127}]
     },
     {
       "index": 1,
       "text": "1. Definitions. Capitalized terms used but not defined elsewhere in this Agreement have the meanings set forth ...",
-      "predictions": [{"name": "Headings", "confidence": 0.0468}]
+      "predictions": [{"name": "Definitions", "confidence": 0.9827}]
     },
     "... 11 more provisions ..."
   ],
   "num_clauses": 13
 }
 ```
+
+The preamble has no matching LEDGAR clause type, so its best guess (Releases) comes with low confidence; see [Clause types missing from LEDGAR](#training-data).
 
 Unsupported options return `400`:
 
@@ -704,10 +713,10 @@ resp = client.chat.completions.create(
     extra_body={"top_k": 3, "threshold": 0.3},       # optional, non-OpenAI knobs
 )
 result = json.loads(resp.choices[0].message.content)
-print(resp.model)                # the version that answered, e.g. "ledgar-qwen3-0.6b-v2"
-print(resp.usage)                # CompletionUsage(prompt_tokens=658, completion_tokens=1011, total_tokens=1669)
+print(resp.model)                # the version that answered, e.g. "ledgar-qwen3-0.6b-v1"
+print(resp.usage)                # CompletionUsage(prompt_tokens=658, completion_tokens=1153, total_tokens=1811)
 print([m.id for m in client.models.list().data])   # all versions, newest first
-print(result["document"])        # [{"name": "Governing Laws", "confidence": 0.5642}, ...]
+print(result["document"])        # [{"name": "Terms", "confidence": 0.9863}, {"name": "Definitions", ...}, ...]
 ```
 
 Request details:

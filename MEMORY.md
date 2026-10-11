@@ -58,6 +58,8 @@ Project memory: decisions, measurements and gotchas that are not obvious from th
 
 ## Measurements (Apple M4 Pro, 48 GB, MPS, torch 2.14.1)
 
+- **`ledgar-qwen3-0.6b-v1` (first full run, default config, finished 2026-10-11 15:12, ~10 h wall clock incl. evals):** full 10k test split 92.46% accuracy, 97.69% top-3, macro-F1 0.8967, weighted F1 0.9224; calibration temperature 0.80 (fitted on 10k validation) cut test ECE from 7.0% to 2.2%. In-training validation (3k subset): 85.5% at step 500, 88.6% (1,000), 90.1% (2,000), 91.5% (3,500), 92.1% (4,000), 92.2% plateau from step 4,000 to 5,625, so the 3rd epoch added only ~0.1 point (a 4th epoch would not help). Early stopping never triggered. Step time 4.8-8.7 s (slower at the end under memory pressure). Top test confusions: Taxes->Withholdings 21, Representations and Warranties->Survival 13, Assignments->Successors and Assigns 13, General->Payments 12. Weakest F1: Venues 0.43, Powers 0.58, Miscellaneous 0.58, Enforceability 0.62, Enforcements 0.63. (2026-10-11)
+
 - **Full fine-tune path verified end to end** on the real Qwen3-0.6B-Base (320 train rows, 10 optimizer steps of 32): loss 6.16 -> 3.75, 5.4 s/step, 840 tok/s, peak 25.0 GB accelerator memory, gradients clipped at every step; checkpoint-best 2.2 GB, checkpoint-last 6.7 GB (fp32 weights + AdamW state), merged 1.1 GB -> ~10 GB per version. Projection: 5,625 steps ~8.4 h + 11 evals x ~3 min -> ~9 h for 3 epochs. (2026-10-11)
 - Stopped LoRA run (lr 2e-4): loss by step 1-100 3.92, 100-300 1.11, 300-600 0.79, 600-900 0.67, 900-1288 0.61; batch accuracy 0.25 -> 0.83; grad norm 20 -> 5 (clip 1.0 active 100% of steps); eval on 3,000 rows took 159-177 s. 10% of late examples still had loss > 2, dominated by General, Applicable Laws, Authority, Payments, Miscellaneous, Enforcements; hard examples were not longer (2.6% vs 1.9% truncated), so max_len 512 stays. (2026-10-11)
 - TF-IDF (1-2 grams, 300k features) + logistic regression: 87.79% on the full 10k validation, 176 s to train; useful as an independent, model-free check of label noise. (2026-10-11)
@@ -70,6 +72,8 @@ Project memory: decisions, measurements and gotchas that are not obvious from th
 - Sanity run (256 examples, 64 steps): val accuracy 0.8% → 17.6%, proving the loop learns; training loss on a 256-example subset reaches about 0.0002 when run longer. (2026-10-11)
 
 ## Gotchas
+
+- **LEDGAR's 100 labels lack common commercial clause types:** Limitation of Liability, Force Majeure, Non-Compete, Non-Solicitation, Audit Rights, Exclusivity, Most Favored Nation, Warranty Disclaimer, Liquidated Damages (also Services, Delivery, Price). The model maps them to the nearest known type; on demo/sample_contract.txt a Limitation of Liability section came back as Indemnifications at 0.72, a services clause as Payments at 0.20 and the preamble as Releases at 0.51. Documented in the README; covering them needs new labelled data. (2026-10-11)
 
 - Changing `configs/ledgar_label_groups.yaml` changes the label space of *new* models only; evaluating an older model needs its saved `label_space.json` (now written automatically). The sanity model trained before this fix had the file reconstructed by hand. (2026-10-11)
 - A random-init tiny Qwen3 for CPU tests must set `layer_types` to match `num_hidden_layers` or `save_pretrained` fails validation. (2026-10-11)
