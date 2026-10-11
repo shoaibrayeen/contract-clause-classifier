@@ -5,13 +5,13 @@
 
 CONFIG ?= configs/ledgar_qwen3_0.6b.yaml
 PORT   ?= 8000
-IMAGE  ?= contract-clause-classifier:0.1.0
+IMAGE  ?= contract-clause-classifier:1.0.0
 MODEL  ?= latest
 UV     ?= uv
 CAFFEINATE := $(shell command -v caffeinate >/dev/null 2>&1 && echo "caffeinate -i")
 
 .DEFAULT_GOAL := help
-.PHONY: help setup data train resume restart finish evaluate gif terminal-gif bump models next adopt sanity predict serve playground-gif test rules \
+.PHONY: help setup data train resume restart finish evaluate gif terminal-gif bump models next adopt sanity predict serve playground-gif test rules changelog-html \
         docker-build docker-up docker-down all clean-runs
 
 help: ## Show this help
@@ -81,6 +81,9 @@ playground-gif: ## Record demo/playground_usage.gif of the playground with the l
 
 test: ## Run the test suite (no trained model needed)
 	$(UV) run pytest -q
+
+changelog-html: ## Regenerate changelog.html from CHANGELOG.md
+	$(UV) run python scripts/sync_changelog_html.py
 
 rules: ## Regenerate every AI assistant's rules file from AGENTS.md
 	$(UV) run python scripts/sync_agent_rules.py

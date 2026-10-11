@@ -41,7 +41,7 @@ These are the rules every AI assistant must follow in this repository. The full 
 9. **Security and privacy:** never commit secrets or `.env`; never log or persist contract text; keep `/v1/*` behind `API_KEY` when set; never commit `artifacts/` or `data/cache/` (the raw LEDGAR parquet in `data/raw/ledgar/` is committed on purpose).
 10. **Do not commit or push** unless the owner asks.
 11. **Docs move with code:** update README (with sample responses), `docs/`, and the agent files in the same change.
-12. **Finish properly:** update `CHANGELOG.md` and `changelog.html` (kept in sync) and append dated decisions, measurements and gotchas to `MEMORY.md` before reporting a task done.
+12. **Finish properly:** update `CHANGELOG.md` (then `make changelog-html`) and append dated decisions, measurements and gotchas to `MEMORY.md` before reporting a task done.
 <!-- core-rules:end -->
 
 ## What this project is
@@ -118,12 +118,12 @@ How models are trained, named, kept and served. These protect the owner's traine
 ## Changelog rules
 
 1. Every user-visible change goes into `CHANGELOG.md` under `## [Unreleased]`, in the same change, grouped as **Added**, **Changed**, **Fixed**, **Removed**, **Deprecated** or **Security** ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)).
-2. Keep `changelog.html` in sync with `CHANGELOG.md`: same entries, same order. Edit both in the same change.
+2. Never edit the release sections of `changelog.html` by hand: edit `CHANGELOG.md`, then run `make changelog-html`. `tests/test_changelog.py` fails if they differ.
 3. Write entries for the owner, not the code: what changed and why it matters, with the command or file name to use. One idea per bullet.
 4. Breaking changes (output shape, API behaviour, config keys, model naming, label set) are marked **Breaking** at the start of the bullet, with what to do about them.
 5. New, upgraded or removed dependencies list the exact version.
 6. Model-affecting changes (rule 8 above) say how new versions will differ from earlier ones, with measured numbers when available.
-7. On release, rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`, bump `version` in `pyproject.toml` and `src/classification/__init__.py`, add a fresh empty `[Unreleased]`, and update the compare links at the bottom. Follow [Semantic Versioning](https://semver.org/): breaking = major, features = minor, fixes = patch.
+7. On release, rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD` with a one-paragraph summary, bump `version` in `pyproject.toml`, `src/classification/__init__.py`, the Docker image tag (`Makefile`, `docker-compose.yml`, README), run `uv lock`, add a fresh empty `[Unreleased]`, update the compare links at the bottom, run `make changelog-html`, and write `docs/releases/vX.Y.Z.md` for the GitHub release. Tag `vX.Y.Z` only when the owner commits. Follow [Semantic Versioning](https://semver.org/): breaking = major, features = minor, fixes = patch.
 8. Never rewrite the entries of a released version, except to fix a factual error (and say so).
 
 ## Security and privacy rules

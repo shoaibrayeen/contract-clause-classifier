@@ -21,4 +21,4 @@ These are the rules every AI assistant must follow in this repository. The full 
 9. **Security and privacy:** never commit secrets or `.env`; never log or persist contract text; keep `/v1/*` behind `API_KEY` when set; never commit `artifacts/` or `data/cache/` (the raw LEDGAR parquet in `data/raw/ledgar/` is committed on purpose).
 10. **Do not commit or push** unless the owner asks.
 11. **Docs move with code:** update README (with sample responses), `docs/`, and the agent files in the same change.
-12. **Finish properly:** update `CHANGELOG.md` and `changelog.html` (kept in sync) and append dated decisions, measurements and gotchas to `MEMORY.md` before reporting a task done.
+12. **Finish properly:** update `CHANGELOG.md` (then `make changelog-html`) and append dated decisions, measurements and gotchas to `MEMORY.md` before reporting a task done.

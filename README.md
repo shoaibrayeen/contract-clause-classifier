@@ -6,6 +6,31 @@ Give it a contract (text, PDF or DOCX). It splits the contract into provisions, 
 
 The current model, **`ledgar-qwen3-0.6b-v1`**, scores **92.5% accuracy** and **97.7% top-3 accuracy** on the 10,000-provision LEDGAR test set.
 
+### How v1 was trained
+
+**Base model**
+* Qwen3-0.6B-Base (596M parameters, Apache-2.0), with a classification head; all weights fine-tuned, no LoRA
+
+**Dataset**
+* LEDGAR via the LexGLUE benchmark: 80,000 clauses from real contracts filed with the US SEC
+* 60k train (2016–17), 10k validation (2018), 10k test (2019), so it is tested on contracts newer than its training data
+* 100 labels merged into 78 clause types after a legal review of each synonym group ([details](#label-grouping-100-labels-become-78-clause-types))
+
+**Fine-tuning**
+* AdamW, learning rate 2e-5, 6% warm-up, cosine decay
+* 3 epochs, effective batch size 32 (4 × 8 gradient accumulation), up to 512 tokens per clause
+* Label smoothing 0.1, gradient clipping 1.0, weight decay 0.01
+* Best checkpoint by validation accuracy, then temperature scaling for calibrated confidence
+
+**Compute**
+* A single laptop with 48 GB of memory, using its built-in GPU through PyTorch
+* 9 h 57 min for 5,625 training steps, about 25M tokens, about 30 GB peak memory
+* No cloud GPU or dedicated server
+
+**Results on the 10,000-provision test set**
+* 92.5% accuracy, 97.7% top-3 accuracy, 89.7% macro-F1
+* 2.2% calibration error, down from 7.0% before calibration
+
 Training runs on **any machine** (Apple Silicon MPS, NVIDIA CUDA or CPU, auto-detected). While it trains, a **live dashboard** prints in the terminal and **every step is recorded** to disk so the run can be replayed as charts, a GIF or a video later. Every training run produces a new **model version** (`ledgar-qwen3-0.6b-v1`, `-v2`, …) and no model is ever overwritten. The API serves all versions, defaults to the latest, and includes a browser **playground**.
 
 ## See it in action
@@ -73,7 +98,7 @@ per-provision top-k [{name, confidence}]
 | Dataset | [LEDGAR](https://huggingface.co/datasets/coastalcph/lex_glue) (LexGLUE) | 80,000 real contract provisions from SEC filings, chronological train/validation/test split (60k / 10k / 10k). Not CUAD, by design. |
 | Labels | 100 LEDGAR labels merged into 78 clause types | 19 groups of legal synonyms ("Applicable Laws" = "Governing Laws", …), each verified on the rows like a contracts lawyer would and confirmed by confusion statistics. See [Training data](#training-data). |
 | Model | [Qwen/Qwen3-0.6B-Base](https://huggingface.co/Qwen/Qwen3-0.6B-Base) | 0.6B parameters, Apache-2.0, strong for its size. Swap to `Qwen/Qwen2.5-0.5B` or `HuggingFaceTB/SmolLM2-360M` with one config line. |
-| Method | Full fine-tuning (all 596M weights), label smoothing 0.1, 3 epochs, early stopping on accuracy | Measured only about 17% slower than LoRA on an M4 Pro and usually 1 to 2 points more accurate. LoRA (r=64) is one flag away. |
+| Method | Full fine-tuning (all 596M weights), label smoothing 0.1, 3 epochs, early stopping on accuracy | Measured only about 17% slower than LoRA on the training laptop and usually 1 to 2 points more accurate. LoRA (r=64) is one flag away. |
 | Framework | PyTorch + Hugging Face `transformers` + `peft` | Same code on MPS, CUDA and CPU. |
 | Confidence | Softmax with temperature scaling fitted on validation | Confidences are calibrated, so 0.9 means right about 90% of the time. |
 
@@ -180,8 +205,8 @@ The v1 result is 4.5 points above the published 100-label state of the art and i
 
 | | Minimum | Tested |
 |---|---|---|
-| OS | macOS on Apple Silicon, or Linux | macOS 26 on Apple M4 Pro, 48 GB |
-| Memory | 32 GB unified memory / RAM for training (24 GB with `full_finetune: false`) | about 25 GB of accelerator memory with the default config |
+| OS | macOS on Apple Silicon, or Linux | a laptop with 48 GB of memory and a built-in GPU |
+| Memory | 32 GB unified memory / RAM for training (24 GB with `full_finetune: false`) | 25 to 30 GB of accelerator memory with the default config (30 GB peak in the v1 run) |
 | Disk | 15 GB free per model version | base model 1.2 GB, data 0.1 GB, each full-fine-tune version about 10 GB (2 GB with LoRA) |
 | Python | 3.12 (installed by uv automatically) | 3.12.13 |
 | Tools | [uv](https://docs.astral.sh/uv/), `make`; Docker optional | uv 0.11, Docker 29 |
@@ -190,7 +215,7 @@ Training time for the default config (full fine-tune, up to 3 epochs, 5,625 opti
 
 | Hardware | Time |
 |---|---|
-| Apple M4 Pro (MPS) | about 9 hours for 3 epochs (5.4 s per step, about 2.8 hours per epoch, plus 11 evaluations of 3 minutes) |
+| Laptop with 48 GB and a built-in GPU (measured, v1) | 9 h 57 min for 3 epochs (5.9 s per step on average, about 3.2 hours per epoch, including 12 evaluations totalling 26 minutes) |
 | Modern NVIDIA GPU (CUDA, bf16) | about 1 to 1.5 hours |
 
 ---
@@ -337,7 +362,7 @@ artifacts/runs/ledgar-qwen3-0.6b-v<N>/
 
 ### Memory notes for Apple Silicon
 
-The default micro-batch is 4 with 8 accumulation steps (effective batch 32). Full fine-tuning then peaks at about 25 GB of accelerator memory; LoRA about 19 GB. A micro-batch of 8 pushes the MPS allocator past 35 GB and starts swapping on a 48 GB machine. The trainer also releases cached accelerator memory every 25 steps. Closing heavy apps (browsers, Docker VMs) during training helps.
+The default micro-batch is 4 with 8 accumulation steps (effective batch 32). Full fine-tuning then uses 25 to 30 GB of accelerator memory (30 GB peak in the v1 run); LoRA about 19 GB. A micro-batch of 8 pushes the MPS allocator past 35 GB and starts swapping on a 48 GB machine. The trainer also releases cached accelerator memory every 25 steps. Closing heavy apps (browsers, Docker VMs) during training helps.
 
 ---
 
@@ -482,7 +507,7 @@ curl -s localhost:8000/health
   "device": "mps",
   "num_labels": 78,
   "uptime_s": 3.414,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "detail": null
 }
 ```
@@ -504,7 +529,7 @@ With more versions trained, `available_models` lists them all and `latest_model`
   "device": null,
   "num_labels": null,
   "uptime_s": 2.146,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "detail": "No trained models in contract-clause-classifier/artifacts/runs. Train one with `make all`."
 }
 ```
@@ -752,7 +777,7 @@ Environment variables (see `.env.example`): `RUNS_DIR` (where versions live), `M
 The image serves a trained model on CPU. Training is done outside Docker.
 
 ```bash
-make docker-build                 # docker build -t contract-clause-classifier:0.1.0 .
+make docker-build                 # docker build -t contract-clause-classifier:1.0.0 .
 make docker-up                    # docker compose up: http://localhost:8000, mounts ./artifacts and ./data
 make docker-down
 ```
@@ -763,7 +788,7 @@ make docker-down
 * **Colima users:** Colima only shares folders listed under `mounts:` in `~/.colima/default/colima.yaml`. If the project is not under a shared folder, the mounts arrive empty and `/health` reports "No trained model". Add the project folder to `mounts:` and run `colima restart`, or copy the model into a container:
 
   ```bash
-  docker create --name ccc -p 8000:8000 contract-clause-classifier:0.1.0
+  docker create --name ccc -p 8000:8000 contract-clause-classifier:1.0.0
   docker start ccc
   for d in artifacts/runs/*/merged; do v=$(basename "$(dirname "$d")"); docker exec ccc mkdir -p /app/artifacts/runs/$v; docker cp "$d" ccc:/app/artifacts/runs/$v/; done
   docker cp data/raw ccc:/app/data/raw
@@ -805,7 +830,8 @@ contract-clause-classifier/
 ├── GEMINI.md, CONVENTIONS.md, .rules, .github/, .windsurf/, .clinerules/, .roo/, .continue/,
 │   .amazonq/, .junie/, .aider.conf.yml   generated rule files for other assistants (make rules); Codex reads AGENTS.md
 ├── MEMORY.md                   project decisions and gotchas (agent memory)
-├── CHANGELOG.md, changelog.html   release notes (Markdown and a standalone HTML page)
+├── CHANGELOG.md, changelog.html   release notes (changelog.html is generated: make changelog-html)
+├── docs/releases/              GitHub release notes per version (v1.0.0.md)
 ├── LICENSE                     Apache-2.0
 ├── data/raw/ledgar/            LEDGAR parquet files + attribution README (committed, 28 MB)
 ├── data/cache/                 (git-ignored) tokenised cache
@@ -849,7 +875,7 @@ Everything lives in [configs/ledgar_qwen3_0.6b.yaml](configs/ledgar_qwen3_0.6b.y
 make test
 ```
 
-75 tests cover segmentation, label grouping, data paging and batching, model versioning (naming, never-overwrite, resume and restart, bumping, latest selection), multi-version serving and model selection, the dashboard fitting the terminal, the prediction output format, every API route and error case, the playground, API-key auth, the OpenAPI schema, compatibility with the official OpenAI Python SDK, and that every AI assistant's rules file matches `AGENTS.md`. They use a keyword-based stub model, so they run in seconds with no download or GPU.
+77 tests cover segmentation, label grouping, data paging and batching, model versioning (naming, never-overwrite, resume and restart, bumping, latest selection), multi-version serving and model selection, the dashboard fitting the terminal, the prediction output format, every API route and error case, the playground, API-key auth, the OpenAPI schema, compatibility with the official OpenAI Python SDK, that every AI assistant's rules file matches `AGENTS.md`, and that `changelog.html` and all version numbers agree with `CHANGELOG.md`. They use a keyword-based stub model, so they run in seconds with no download or GPU.
 
 ---
 

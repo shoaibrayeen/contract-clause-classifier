@@ -1,6 +1,6 @@
 [project]
 name = "contract-clause-classifier"
-version = "0.1.0"
+version = "1.0.0"
 description = "Contract clause-type classifier: fine-tune a ~0.6B LM (Qwen3-0.6B) on LEDGAR, serve via an OpenAI-compatible FastAPI."
 readme = "README.md"
 license = "Apache-2.0"

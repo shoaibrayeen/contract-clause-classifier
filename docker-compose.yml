@@ -1,7 +1,7 @@
 services:
   api:
     build: .
-    image: contract-clause-classifier:0.1.0
+    image: contract-clause-classifier:1.0.0
     container_name: contract-clause-classifier
     ports:
       - "8000:8000"

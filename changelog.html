@@ -69,17 +69,26 @@
   <p class="sub">Contract Clause Classifier: Qwen3-0.6B fine-tuned on LEDGAR, served through an OpenAI-compatible FastAPI.</p>
   <p class="meta">Follows <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a> and <a href="https://semver.org/">Semantic Versioning</a>. Kept in sync with <code>CHANGELOG.md</code>.</p>
   <nav class="nav">
+    <!-- versions:start -->
     <a href="#unreleased">Unreleased</a>
+    <a href="#v1-0-0">1.0.0</a>
     <a href="#v0-1-0">0.1.0</a>
+    <!-- versions:end -->
     <a href="README.md">README</a>
     <a href="LICENSE">License</a>
     <a href="https://github.com/shoaibrayeen/contract-clause-classifier">Repository</a>
   </nav>
 </header>
 
+<!-- releases:start -->
 <section class="release" id="unreleased">
   <h2><span class="tag version">Unreleased</span></h2>
-  <p>Model versioning, accuracy-focused training defaults, a browser playground, and rules for every AI assistant.</p>
+  <p>Nothing yet.</p>
+</section>
+
+<section class="release" id="v1-0-0">
+  <h2><span class="tag version">1.0.0</span> <span class="meta">2026-10-11</span></h2>
+  <p>First fully trained model, <strong><code>ledgar-qwen3-0.6b-v1</code></strong>: 92.46% accuracy, 97.69% top-3 accuracy and 89.7% macro-F1 on the full 10,000-provision LEDGAR test set (78 clause types). Also model versioning, accuracy-focused training defaults, legally reviewed label groups, a browser playground, demo GIFs, the dataset committed with provenance, and rules for every AI assistant. Contains breaking changes (marked below), hence the major version.</p>
   <h3><span class="tag added">Added</span></h3>
   <ul>
     <li><strong>Model versions.</strong> Every training run creates <code>&lt;train.run_name&gt;-v&lt;model_version&gt;</code> (first: <code>ledgar-qwen3-0.6b-v1</code>) and no model is ever overwritten. <code>model_version</code> in <code>configs/ledgar_qwen3_0.6b.yaml</code> starts at 1 and <code>make all</code> raises it after the run, evaluation and GIF succeed. Unfinished versions are never replaced silently: <code>make resume</code> continues one, <code>make restart</code> discards and retrains it.</li>
@@ -97,7 +106,7 @@
     <li><code>MODEL=</code> on <code>make evaluate</code>, <code>make gif</code> and <code>make predict</code>; <code>--model</code> on <code>03_evaluate.py</code> and <code>04_predict.py</code>; <code>--run latest|&lt;version&gt;</code> and <code>--copy-to</code> on <code>06_render_gif.py</code>.</li>
     <li>Training settings <code>train.label_smoothing</code> and <code>train.best_metric</code>.</li>
     <li>Rules for all AI assistants: core-rules summary plus Model, Changelog, Security and privacy, Git, Data and Documentation rules in <code>AGENTS.md</code>; generated rule files for GitHub Copilot, Gemini, Windsurf, Cline, Roo Code, Continue, Amazon Q, JetBrains Junie, Zed and Aider (<code>make rules</code>), kept in sync by a test.</li>
-    <li>Tests: 75 in total (versioning, multi-version API, label grouping, dashboard fit, playground, rule-file sync).</li>
+    <li>Tests: 77 in total (versioning, multi-version API, label grouping, dashboard fit, playground, rule-file sync).</li>
   </ul>
   <h3><span class="tag changed">Changed</span></h3>
   <ul>
@@ -114,9 +123,11 @@
     <li>Console and API output show project-relative paths instead of <code>/Users/...</code>.</li>
     <li>Docker image serves all versions (<code>RUNS_DIR=/app/artifacts/runs</code>) and includes the label-group file.</li>
   </ul>
-  <h3><span class="tag added">Measured</span></h3>
+  <h3><span class="tag pinned">Measured</span></h3>
   <ul>
     <li><strong>First fully trained model, <code>ledgar-qwen3-0.6b-v1</code>:</strong> 92.46% accuracy, 97.69% top-3 accuracy and 89.7% macro-F1 on the full 10,000-row LEDGAR test split (78 clause types); calibration error 2.2% after temperature scaling (7.0% before). Validation accuracy plateaued at 92.2% from step 4,000 of 5,625.</li>
+    <li>Release tooling: <code>make changelog-html</code> (<code>scripts/sync_changelog_html.py</code>) regenerates every release section of <code>changelog.html</code> from <code>CHANGELOG.md</code>, and tests fail if the two differ or if the package, changelog and Docker image versions disagree. GitHub release notes live in <code>docs/releases/</code> (this release: <code>docs/releases/v1.0.0.md</code>).</li>
+    <li>README has a "How v1 was trained" summary (base model, dataset, fine-tuning settings, compute, results) with hardware-neutral wording, and its requirements and timing tables now use the measured v1 numbers (9 h 57 min, 30 GB peak).</li>
     <li>README opens with a "See it in action" section showing the three real v1 GIFs (training charts, playground, terminal dashboard) in place of the illustrative output sample.</li>
     <li>README sample responses now come from v1, and the README documents the commercial clause types LEDGAR does not cover (Limitation of Liability, Force Majeure, Non-Compete and others), which the model can only map to the nearest known type.</li>
   </ul>
@@ -132,176 +143,145 @@
 
 <section class="release" id="v0-1-0">
   <h2><span class="tag version">0.1.0</span> <span class="meta">2026-10-11</span></h2>
-  <p>First complete version: data, training with telemetry, evaluation, inference, OpenAI-compatible API, Docker, documentation, licensing and agent guidance. Built and verified on an Apple M4 Pro with 48&nbsp;GB. Every step was verified end to end except the multi-hour full training run, which is left to the owner (<code>make all</code>).</p>
-
+  <p>First complete version: data, training with telemetry, evaluation, inference, OpenAI-compatible API, Docker, documentation, licensing and agent guidance. Built on an Apple M4 Pro (48 GB); every step was verified end to end except the multi-hour full training run, which is left to the owner (<code>make all</code>).</p>
   <h3><span class="tag added">Added</span></h3>
-
-  <h4>Data</h4>
+  <h4>Data (<code>src/classification/data.py</code>, <code>scripts/01_prepare_data.py</code>)</h4>
   <ul>
-    <li>Download of the LEDGAR split of LexGLUE from the Hugging Face parquet export (<code>coastalcph/lex_glue</code>, config <code>ledgar</code>), with an automatic fallback to the <code>lighteval/lexglue</code> mirror.</li>
-    <li>The 100 clause-type names are extracted from the parquet schema into <code>data/raw/ledgar/labels.json</code>.</li>
-    <li>Tokenisation cache per tokenizer and maximum length, so repeated runs skip tokenisation.</li>
-    <li>Length-grouped batch sampler that cuts padding to about 2%, deterministic per seed and epoch so resumed runs see the same order.</li>
-    <li>Every batch carries the source row id of each example, so training can be traced back to the dataset.</li>
-    <li>Lazy memory-mapped <code>DatasetStore</code> behind the paginated dataset endpoint.</li>
-    <li>Token-length statistics after preparation: mean 138, median 105, p90 292, 1.9% truncated at 512.</li>
+    <li>Download of the LEDGAR split of LexGLUE from the Hugging Face parquet export (<code>coastalcph/lex_glue</code>, config <code>ledgar</code>, revision <code>refs/convert/parquet</code>), with an automatic fallback to the <code>lighteval/lexglue</code> mirror through the datasets-server API.</li>
+    <li>Extraction of the 100 clause-type names from the parquet schema metadata into <code>data/raw/ledgar/labels.json</code>.</li>
+    <li>Tokenisation cache per tokenizer and <code>max_len</code> (parquet, <code>list&lt;int32&gt;</code>), so repeated runs skip tokenisation.</li>
+    <li>Length-grouped batch sampler (shuffle, sort within mega-batches, cut) that cuts padding to about 2%, deterministic per seed and epoch so <code>--resume</code> sees the same order.</li>
+    <li>Collate function that carries the source row id of every example, so each training batch can be traced back to the dataset.</li>
+    <li><code>DatasetStore</code>, a lazy memory-mapped reader used by the paginated <code>/v1/dataset</code> endpoint.</li>
+    <li>Token-length statistics printed after preparation (mean 138, median 105, p90 292, 1.9% truncated at 512).</li>
   </ul>
-
-  <h4>Model</h4>
+  <h4>Model (<code>src/classification/model.py</code>)</h4>
   <ul>
-    <li>Qwen3-0.6B-Base loaded as a sequence classifier with a 100-way head.</li>
-    <li>LoRA via PEFT on all attention and MLP projections (r=16, alpha=32, dropout 0.05); the head trains fully. 10.2M of 606M parameters train. Full fine-tuning is one flag.</li>
-    <li>Checkpoint save and load for adapter and full-weight checkpoints; adapter loading rebuilds the base with the right label count first.</li>
-    <li>Merge-and-export to a standalone bf16 safetensors model with labels and calibration, plus a permissions fix so Docker's non-root user can read it.</li>
+    <li>Qwen3-0.6B-Base loaded as <code>AutoModelForSequenceClassification</code> with a 100-way head and the pad token set.</li>
+    <li>LoRA via PEFT on <code>q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj</code> (r=16, alpha=32, dropout 0.05), head fully trainable; 10.2M of 606M parameters train. <code>full_finetune: true</code> trains everything.</li>
+    <li>Checkpoint save and load for both adapter and full-weight checkpoints; adapter loading rebuilds the base with the right label count first (PEFT adapter directories carry no base config).</li>
+    <li>Merge-and-export (<code>merge_and_unload</code>) to a standalone bf16 safetensors model with <code>labels.json</code> and <code>calibration.json</code>, and a permissions fix so exported files are world-readable (safetensors are written 0600, which broke Docker's non-root user).</li>
+    <li>Temperature calibration file helpers.</li>
   </ul>
-
-  <h4>Training</h4>
+  <h4>Training (<code>src/classification/train.py</code>, <code>scripts/02_train.py</code>)</h4>
   <ul>
-    <li>Plain PyTorch loop: AdamW with weight-decay groups, 3% warm-up then cosine decay, gradient accumulation, gradient clipping, autocast mixed precision.</li>
-    <li>Device auto-detection (CUDA, then Apple MPS, then CPU). Precision <code>auto</code> is bf16 on CUDA and fp32 on MPS and CPU.</li>
-    <li>Evaluation every 500 steps on a fixed 3,000-example validation subset; best checkpoint by macro-F1; last checkpoint with optimizer state; early stopping after 4 evaluations without improvement.</li>
-    <li><code>--resume</code> continues from the last checkpoint and skips consumed micro-batches.</li>
-    <li>Periodic accelerator cache release every 25 steps.</li>
-    <li>At the end the best checkpoint is merged to <code>merged/</code> and <code>artifacts/best</code> is updated.</li>
-    <li>Command-line overrides for run name, epochs, limit, evaluation cadence, batch size, accumulation, learning rate, device, precision and backbone.</li>
+    <li>Plain PyTorch loop, no <code>Trainer</code>: AdamW with decoupled weight decay groups, 3% linear warm-up then cosine decay, gradient accumulation, gradient clipping, mixed precision through autocast.</li>
+    <li>Device auto-detection <code>cuda &gt; mps &gt; cpu</code>; precision <code>auto</code> is bf16 on CUDA (fp16 when bf16 is unsupported) and fp32 on MPS and CPU.</li>
+    <li>Evaluation every 500 optimizer steps on a fixed 3,000-example validation subset; <code>checkpoint-best/</code> kept by macro-F1; <code>checkpoint-last/</code> with optimizer and scheduler state; early stopping after 4 evaluations without improvement.</li>
+    <li><code>--resume</code> continues from <code>checkpoint-last/</code>, skipping already-consumed micro-batches.</li>
+    <li>Periodic accelerator cache release (<code>train.empty_cache_steps</code>, default 25).</li>
+    <li>At the end: best checkpoint merged to <code>merged/</code> and the <code>artifacts/best</code> symlink updated.</li>
+    <li>CLI overrides for run name, epochs, limit, eval steps and limit, batch size, accumulation, learning rate, device, precision and backbone.</li>
+    <li>Noisy HTTP loggers silenced.</li>
   </ul>
-
-  <h4>Live dashboard</h4>
+  <h4>Live dashboard (<code>src/classification/dashboard.py</code>)</h4>
   <ul>
-    <li>Terminal panel refreshed twice a second: progress with ETA, loss and smoothed loss with a sparkline, learning rate, gradient norm and clipping, batch accuracy, tokens per second, step time, padding ratio, accelerator memory, CPU and RAM, clause types in the current batch, last five validation results.</li>
-    <li>Plain one-line log every 10 steps when output is redirected.</li>
+    <li>Rich live panel refreshed twice a second: progress bar with ETA, loss and smoothed loss with a sparkline, learning rate, gradient norm and clipping flag, batch accuracy, tokens per second, step time, padding ratio, accelerator memory, CPU and RAM, the clause types in the current batch, and the last five validation results.</li>
+    <li>Plain one-line log every 10 steps when output is not a terminal.</li>
   </ul>
-
-  <h4>Telemetry</h4>
-  <p class="sub">Everything needed to replay a run later as charts, a GIF or a video, under <code>artifacts/runs/&lt;run&gt;/telemetry/</code>. Append-only, line-buffered, safe across crashes and resumes. Schema in <code>docs/TELEMETRY.md</code>.</p>
-  <table>
-    <tr><th>File</th><th>Captures</th></tr>
-    <tr><td><code>meta.json</code></td><td>config, environment, model shape, dataset statistics, probe-set ids, sessions, final summary</td></tr>
-    <tr><td><code>steps.jsonl</code></td><td>per optimizer step: loss, learning rate, gradient norm, clipping, step time, tokens, padding, throughput, memory, and the batch's example ids, labels, lengths, per-example losses and correctness</td></tr>
-    <tr><td><code>layers.jsonl</code></td><td>gradient norm per transformer layer and head every 10 steps</td></tr>
-    <tr><td><code>evals.jsonl</code></td><td>per evaluation: accuracy, micro and macro-F1, loss, per-class F1 for all 100 types, trainable weight norm per layer</td></tr>
-    <tr><td><code>evals/step_*.npz</code></td><td>confusion matrix and calibration bins</td></tr>
-    <tr><td><code>snapshots/step_*.npz</code></td><td>for a fixed probe set (about 500 validation examples): probabilities, final-layer embeddings, activation norms at all 29 layers, full per-layer vectors for a 1-per-class subset</td></tr>
-    <tr><td><code>events.jsonl</code></td><td>start, snapshot, eval, checkpoint, early stop, done</td></tr>
-    <tr><td><code>system.jsonl</code></td><td>CPU, RAM, process memory, accelerator memory, phase, every 5 seconds</td></tr>
-  </table>
+  <h4>Telemetry (<code>src/classification/telemetry.py</code>, <code>docs/TELEMETRY.md</code>)</h4>
   <ul>
-    <li>Probe forward pass uses length-sorted batches: 24 seconds instead of 120 for the probe set.</li>
+    <li><code>RunRecorder</code> writes append-only, line-buffered files under <code>artifacts/runs/&lt;run&gt;/telemetry/</code>, safe across crashes and resumes.</li>
+    <li><code>meta.json</code>: config, environment (Python, torch, transformers, peft, platform, chip, memory, GPU), model shape, dataset statistics (label counts, length histograms), probe-set ids, sessions, final summary.</li>
+    <li><code>steps.jsonl</code>: per optimizer step: loss, learning rate, gradient norm, clipping, step time, tokens, padding ratio, throughput, memory, plus the batch's example ids, labels, lengths, per-example losses and correctness.</li>
+    <li><code>layers.jsonl</code>: gradient norm per transformer layer and head every 10 steps.</li>
+    <li><code>evals.jsonl</code>: per evaluation: accuracy, micro and macro-F1, loss, duration, per-class F1 for all 100 types, trainable weight norm per layer.</li>
+    <li><code>evals/step_*.npz</code>: confusion matrix and calibration bins per evaluation.</li>
+    <li><code>snapshots/step_*.npz</code>: for a fixed stratified probe set (5 per class, about 500) at step 0 and every evaluation: probabilities, final-layer embeddings, activation norm at each of the 29 layers, and full per-layer vectors for a 1-per-class subset.</li>
+    <li><code>events.jsonl</code>: start, snapshot, eval, checkpoint, early stop, done.</li>
+    <li><code>system.jsonl</code>: CPU, RAM, process memory, accelerator memory, phase, sampled every 5 seconds by a background thread.</li>
+    <li>Probe forward pass uses length-sorted batches (24 s instead of 120 s for the probe set).</li>
   </ul>
-
-  <h4>Evaluation</h4>
+  <h4>Evaluation (<code>src/classification/evaluate.py</code>, <code>scripts/03_evaluate.py</code>)</h4>
   <ul>
-    <li>Full test report: accuracy, micro, macro and weighted F1, log loss, calibration error before and after scaling, per-class precision and recall, top confusions.</li>
-    <li>Temperature scaling fitted on validation and saved next to the model; the API applies it automatically.</li>
+    <li>Full test-split report: accuracy, micro, macro and weighted F1, negative log-likelihood, expected calibration error before and after calibration, per-class precision, recall and F1, top confusions.</li>
+    <li>Temperature scaling fitted on validation with L-BFGS and saved next to the model; the API applies it automatically.</li>
   </ul>
-
-  <h4>Inference</h4>
+  <h4>Inference (<code>segment.py</code>, <code>io_utils.py</code>, <code>predict.py</code>, <code>scripts/04_predict.py</code>)</h4>
   <ul>
-    <li>Contract segmentation into provisions: paragraphs, heading gluing, numbered sections, sub-item grouping, long-chunk splitting, merging of tiny unnumbered fragments.</li>
-    <li>Readers for text, Markdown, PDF with a text layer, and DOCX including tables.</li>
-    <li>Predictor with a pluggable backend: per-provision top-k with threshold (top-1 always kept) and document-level aggregation by maximum confidence.</li>
-    <li>Command-line tool for files or <code>--text</code>.</li>
+    <li>Contract segmentation: paragraph splitting, heading gluing, numbered-section detection (<code>1.</code>, <code>1.1</code>, <code>Article IV</code>, <code>Section 5.2</code>), sub-item grouping, long-chunk splitting on sentence boundaries, merging of tiny unnumbered fragments.</li>
+    <li>Readers for <code>.txt</code>, <code>.md</code>, <code>.pdf</code> (PyMuPDF, text layer required) and <code>.docx</code> (python-docx, including tables).</li>
+    <li><code>Predictor</code> with a pluggable backend: per-provision top-k with threshold (top-1 always kept) and document-level aggregation by maximum confidence.</li>
+    <li>CLI for files or <code>--text</code>, with <code>--top-k</code>, <code>--threshold</code>, <code>--no-segment</code>, <code>--out</code>.</li>
   </ul>
-
-  <h4>API (FastAPI, OpenAI-compatible)</h4>
+  <h4>API (<code>src/classification/api/</code>, <code>scripts/05_serve.py</code>)</h4>
   <ul>
-    <li><code>GET /health</code> (200, or 503 with a reason), <code>GET /v1/models</code>, <code>GET /v1/models/{id}</code>, <code>POST /v1/chat/completions</code>, <code>GET /v1/dataset</code> (10 rows per page by default, up to 100), <code>GET /v1/labels</code>.</li>
-    <li>Chat completions accept the OpenAI request body, return a standard completion object with real token usage, and reject streaming and <code>n&gt;1</code>. Extra knobs <code>top_k</code>, <code>threshold</code>, <code>segment</code>.</li>
-    <li>OpenAI-style error envelope for every error, including validation errors.</li>
-    <li>Optional bearer-token authentication, CORS, input size limit, environment-variable settings.</li>
-    <li>Verified with the official OpenAI Python SDK.</li>
+    <li>FastAPI app factory with lifespan model loading; the app keeps serving <code>/health</code> and the dataset routes if the model fails to load.</li>
+    <li><code>GET /health</code> (200 or 503 with a reason), <code>GET /v1/models</code>, <code>GET /v1/models/{id}</code>, <code>POST /v1/chat/completions</code>, <code>GET /v1/dataset</code> (10 rows per page by default, up to 100), <code>GET /v1/labels</code>.</li>
+    <li>Chat completions accept the OpenAI body (string or content-part messages), return a standard <code>chat.completion</code> object with real token usage, and reject <code>stream=true</code> and <code>n&gt;1</code> with 400. Extra knobs <code>top_k</code>, <code>threshold</code>, <code>segment</code>.</li>
+    <li>OpenAI-style error envelope for all errors, including validation errors.</li>
+    <li>Optional bearer-token authentication (<code>API_KEY</code>), CORS, input size limit, settings from environment variables (<code>.env.example</code>).</li>
+    <li>Verified with the official <code>openai</code> Python SDK.</li>
   </ul>
-
   <h4>Docker</h4>
   <ul>
-    <li>Image on <code>python:3.12.15-slim-bookworm</code> with the CPU-only torch wheel, runtime dependencies only, non-root user, health check. About 1.9&nbsp;GB.</li>
-    <li>Compose file mounting <code>./artifacts</code> and <code>./data</code>; <code>.dockerignore</code>.</li>
+    <li><code>Dockerfile</code> on <code>python:3.12.15-slim-bookworm</code> with the CPU-only torch wheel, runtime dependencies only, non-root user, <code>HEALTHCHECK</code> on <code>/health</code>. Image about 1.9 GB.</li>
+    <li><code>docker-compose.yml</code> mounting <code>./artifacts</code> and <code>./data</code>.</li>
+    <li><code>.dockerignore</code>.</li>
   </ul>
-
-  <h4>Visualisation</h4>
+  <h4>Visualisation (<code>scripts/06_render_gif.py</code>, <code>demo/</code>)</h4>
   <ul>
-    <li>GIF renderer with four animated panels: training loss, validation accuracy and macro-F1, per-layer gradient heatmap, PCA of probe embeddings moving between snapshots. Works mid-training.</li>
-    <li>Demo GIF and final frame from the sanity run, and a 12-section sample contract, under <code>demo/</code>.</li>
+    <li>Renders a run's telemetry into an animated GIF with four panels: training loss, validation accuracy and macro-F1, per-layer gradient heatmap, and PCA of probe embeddings moving between snapshots. Works mid-training.</li>
+    <li><code>demo/sanity_training.gif</code> and <code>demo/sanity_training_final_frame.png</code> from the 5-minute sanity run; <code>demo/sample_contract.txt</code>, a 12-section master services agreement.</li>
   </ul>
-
   <h4>Tooling</h4>
   <ul>
-    <li>Makefile targets: setup, data, train, resume, sanity, evaluate, gif, predict, serve, test, docker-build, docker-up, docker-down, all, clean-runs, help.</li>
-    <li>Exact dependency pins with groups <code>train</code>, <code>viz</code>, <code>dev</code>; lock file; Python 3.12.</li>
-    <li>Git ignore rules for data, artifacts, model files, environments and editor state.</li>
+    <li><code>Makefile</code>: <code>setup</code>, <code>data</code>, <code>train</code>, <code>resume</code>, <code>sanity</code>, <code>evaluate</code>, <code>gif</code>, <code>predict</code>, <code>serve</code>, <code>test</code>, <code>docker-build</code>, <code>docker-up</code>, <code>docker-down</code>, <code>all</code>, <code>clean-runs</code>, <code>help</code>.</li>
+    <li><code>pyproject.toml</code> with exact pins, dependency groups <code>train</code>, <code>viz</code>, <code>dev</code>, and <code>uv.lock</code>; <code>.python-version</code> = 3.12.</li>
+    <li><code>.gitignore</code> for data, artifacts, model files, environments and editor state.</li>
   </ul>
-
-  <h4>Tests</h4>
+  <h4>Tests (<code>tests/</code>)</h4>
   <ul>
-    <li>28 pytest tests with a keyword stub model: segmentation, data paging and batching, telemetry sessions, prediction format, API routes, errors, auth, OpenAPI schema, OpenAI SDK compatibility. No downloads or GPU; about 3 seconds.</li>
+    <li>28 pytest tests using a keyword stub model: segmentation (5), data paging and batching (4), telemetry sessions (1), prediction format (4), API routes, errors, auth, OpenAPI schema and OpenAI SDK compatibility (14). No downloads or GPU needed; about 3 seconds.</li>
   </ul>
-
   <h4>Documentation</h4>
   <ul>
-    <li>README covering how it works, training data, requirements, setup, pipeline, training, telemetry, evaluation, CLI, API with sample requests and responses for every endpoint, Docker, layout, configuration, testing, troubleshooting, pinned versions, license and author.</li>
-    <li><code>docs/TELEMETRY.md</code> with the schema of every telemetry file; <code>plans/PLAN.md</code> with the approved plan and an implementation-status table; this changelog in Markdown and HTML.</li>
+    <li><code>README.md</code>: how it works, training data, requirements, setup, pipeline, training, telemetry, evaluation, CLI, API with sample requests and responses for every endpoint, Docker, layout, configuration, testing, troubleshooting, pinned versions, license, author.</li>
+    <li><code>docs/TELEMETRY.md</code>: schema of every telemetry file with shapes and intended uses.</li>
+    <li><code>plans/PLAN.md</code>: approved design plan plus an implementation-status table of deviations.</li>
+    <li><code>CHANGELOG.md</code> and <code>changelog.html</code>.</li>
   </ul>
-
   <h4>Agent guidance</h4>
   <ul>
     <li><code>AGENTS.md</code> as the single source of truth (commands, layout, 12 rules, style, gotchas) with a map of how Codex, Claude Code and Cursor read it.</li>
-    <li><code>CLAUDE.md</code> importing it; Cursor rules (always-on project rule and a Python style rule); <code>.codex/README.md</code>.</li>
+    <li><code>CLAUDE.md</code> importing <code>AGENTS.md</code> with Claude-specific notes; <code>.cursor/rules/project.mdc</code> (always on) and <code>.cursor/rules/python-style.mdc</code>; <code>.codex/README.md</code>.</li>
     <li>Rule 11: always update <code>MEMORY.md</code> after completing a task. Rule 12: a task is complete only when tests pass and docs, changelog and memory are updated.</li>
-    <li><code>MEMORY.md</code> with owner preferences, design decisions, measurements and gotchas, all dated.</li>
+    <li><code>MEMORY.md</code>: owner preferences, design decisions, measurements and gotchas, dated.</li>
   </ul>
-
   <h4>Licensing</h4>
   <ul>
-    <li>Apache License 2.0 (copyright 2026 Shoaib Rayeen), chosen to match Qwen3-0.6B-Base and the Hugging Face stack and to include a patent grant. License, author, keywords and URLs added to <code>pyproject.toml</code>.</li>
+    <li>Apache License 2.0 (<code>LICENSE</code>, copyright 2026 Shoaib Rayeen), chosen to match Qwen3-0.6B-Base and the Hugging Face stack and to include a patent grant. License, author, keywords and URLs added to <code>pyproject.toml</code>.</li>
   </ul>
-
   <h3><span class="tag changed">Changed during the build</span></h3>
   <ul>
     <li>Package renamed from <code>clauseclf</code> to <code>classification</code>; project folder renamed from <code>domain_models</code> to <code>contract-clause-classifier</code>.</li>
-    <li>Framework switched from MLX to PyTorch so training is machine-independent.</li>
-    <li>Micro-batch reduced from 8 to 4 with accumulation raised from 4 to 8 (effective batch 32 unchanged) after batch 8 drove Apple MPS memory to about 35&nbsp;GB and swapping.</li>
+    <li>Framework switched from MLX (first plan) to PyTorch so training is machine-independent.</li>
+    <li>Micro-batch reduced from 8 to 4 with accumulation raised from 4 to 8 (effective batch 32 unchanged) after batch 8 drove MPS memory to about 35 GB and swapping on a 48 GB Mac.</li>
     <li>Epochs reduced from 3 to 2 (about 2.3 hours per epoch on the M4 Pro).</li>
-    <li>In-training evaluation limited to a fixed 3,000-example validation subset.</li>
+    <li>In-training evaluation limited to a fixed 3,000-example validation subset to keep each evaluation near a minute.</li>
     <li><code>precision: auto</code> uses fp32 on MPS after bf16 autocast measured no faster.</li>
   </ul>
-
   <h3><span class="tag fixed">Fixed during the build</span></h3>
   <ul>
     <li>Progress bar crashed on evaluation (<code>KeyError: 'status'</code>).</li>
-    <li>Adapter checkpoints failed to load with a 2-label head; fixed by rebuilding the base with the right label count.</li>
+    <li>Adapter checkpoints failed to load through <code>AutoPeftModelForSequenceClassification</code> (2-label head); fixed by rebuilding the base with the right label count.</li>
     <li>Short numbered sections were merged into neighbouring provisions by the segmenter.</li>
-    <li>Exported safetensors were unreadable by Docker's non-root user.</li>
-    <li>Model fingerprint showed the folder name instead of the run name.</li>
-    <li>Duplicate session entries in telemetry metadata.</li>
+    <li>Exported safetensors were unreadable by Docker's non-root user (0600).</li>
+    <li><code>system_fingerprint</code> showed the folder name <code>merged</code> instead of the run name.</li>
+    <li>Duplicate session entries in <code>meta.json</code> on every metadata update.</li>
   </ul>
-
   <h3><span class="tag pinned">Pinned</span></h3>
-  <details open>
-    <summary>Exact versions (stable releases, tested together)</summary>
-    <table>
-      <tr><th>Package</th><th>Version</th><th>Package</th><th>Version</th></tr>
-      <tr><td>Python</td><td>3.12</td><td>fastapi</td><td>0.143.0</td></tr>
-      <tr><td>torch</td><td>2.14.1</td><td>uvicorn</td><td>0.54.0</td></tr>
-      <tr><td>transformers</td><td>5.19.0</td><td>pydantic</td><td>2.14.0</td></tr>
-      <tr><td>peft</td><td>0.21.2</td><td>pyarrow</td><td>26.0.0</td></tr>
-      <tr><td>accelerate</td><td>1.15.0</td><td>pymupdf</td><td>1.28.2</td></tr>
-      <tr><td>scikit-learn</td><td>1.9.1</td><td>python-docx</td><td>1.2.0</td></tr>
-      <tr><td>huggingface_hub</td><td>2.2.0</td><td>rich</td><td>15.0.0</td></tr>
-      <tr><td>safetensors</td><td>0.8.0</td><td>typer</td><td>0.27.3</td></tr>
-      <tr><td>numpy</td><td>2.5.3</td><td>psutil</td><td>7.2.2</td></tr>
-      <tr><td>matplotlib</td><td>3.11.2</td><td>pillow</td><td>12.3.0</td></tr>
-      <tr><td>pytest</td><td>9.1.1</td><td>httpx</td><td>0.28.1</td></tr>
-      <tr><td>openai</td><td>3.28.0</td><td>Docker base</td><td>python:3.12.15-slim-bookworm</td></tr>
-    </table>
-  </details>
-
-  <h3>Measured (Apple M4 Pro, 48 GB, MPS)</h3>
+  <ul>
+    <li>Python 3.12; torch 2.14.1, transformers 5.19.0, peft 0.21.2, accelerate 1.15.0, huggingface_hub 2.2.0, safetensors 0.8.0, numpy 2.5.3, pyarrow 26.0.0, scikit-learn 1.9.1, fastapi 0.143.0, uvicorn 0.54.0, pydantic 2.14.0, pymupdf 1.28.2, python-docx 1.2.0, rich 15.0.0, typer 0.27.3, pyyaml 6.0.3, psutil 7.2.2, matplotlib 3.11.2, pillow 12.3.0, pytest 9.1.1, httpx 0.28.1, openai 3.28.0; Docker base <code>python:3.12.15-slim-bookworm</code>.</li>
+  </ul>
+  <h3><span class="tag pinned">Measured (Apple M4 Pro, 48 GB, MPS)</span></h3>
   <ul>
     <li>About 990 tokens per second, about 4.4 seconds per optimizer step of 32 examples; 2 epochs about 5 hours.</li>
-    <li>Micro-batch 4: about 19.5&nbsp;GB accelerator memory. Micro-batch 8: about 35&nbsp;GB and swap exhaustion.</li>
+    <li>Micro-batch 4: about 19.5 GB accelerator memory. Micro-batch 8: about 35 GB and swap exhaustion.</li>
     <li>Sanity run (256 examples, 128 steps): validation accuracy 0.8% to 20%, proving the loop learns.</li>
   </ul>
 </section>
+<!-- releases:end -->
 
 <footer>
   Shoaib Rayeen · <a href="mailto:shoaibrayeen.me@gmail.com">shoaibrayeen.me@gmail.com</a> · <a href="https://shoaibrayeen.github.io/">shoaibrayeen.github.io</a> · Apache-2.0

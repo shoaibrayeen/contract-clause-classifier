@@ -4,7 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-Model versioning, accuracy-focused training defaults, a browser playground, and rules for every AI assistant.
+Nothing yet.
+
+## [1.0.0] - 2026-10-11
+
+First fully trained model, **`ledgar-qwen3-0.6b-v1`**: 92.46% accuracy, 97.69% top-3 accuracy and 89.7% macro-F1 on the full 10,000-provision LEDGAR test set (78 clause types). Also model versioning, accuracy-focused training defaults, legally reviewed label groups, a browser playground, demo GIFs, the dataset committed with provenance, and rules for every AI assistant. Contains breaking changes (marked below), hence the major version.
 
 ### Added
 
@@ -23,7 +27,7 @@ Model versioning, accuracy-focused training defaults, a browser playground, and 
 - `MODEL=` on `make evaluate`, `make gif` and `make predict`; `--model` on `03_evaluate.py` and `04_predict.py`; `--run latest|<version>` and `--copy-to` on `06_render_gif.py`.
 - Training settings `train.label_smoothing` and `train.best_metric`.
 - Rules for all AI assistants: core-rules summary plus Model, Changelog, Security and privacy, Git, Data and Documentation rules in `AGENTS.md`; generated rule files for GitHub Copilot, Gemini, Windsurf, Cline, Roo Code, Continue, Amazon Q, JetBrains Junie, Zed and Aider (`make rules`), kept in sync by a test.
-- Tests: 75 in total (versioning, multi-version API, label grouping, dashboard fit, playground, rule-file sync).
+- Tests: 77 in total (versioning, multi-version API, label grouping, dashboard fit, playground, rule-file sync).
 
 ### Changed
 
@@ -43,6 +47,8 @@ Model versioning, accuracy-focused training defaults, a browser playground, and 
 ### Measured
 
 - **First fully trained model, `ledgar-qwen3-0.6b-v1`:** 92.46% accuracy, 97.69% top-3 accuracy and 89.7% macro-F1 on the full 10,000-row LEDGAR test split (78 clause types); calibration error 2.2% after temperature scaling (7.0% before). Validation accuracy plateaued at 92.2% from step 4,000 of 5,625.
+- Release tooling: `make changelog-html` (`scripts/sync_changelog_html.py`) regenerates every release section of `changelog.html` from `CHANGELOG.md`, and tests fail if the two differ or if the package, changelog and Docker image versions disagree. GitHub release notes live in `docs/releases/` (this release: `docs/releases/v1.0.0.md`).
+- README has a "How v1 was trained" summary (base model, dataset, fine-tuning settings, compute, results) with hardware-neutral wording, and its requirements and timing tables now use the measured v1 numbers (9 h 57 min, 30 GB peak).
 - README opens with a "See it in action" section showing the three real v1 GIFs (training charts, playground, terminal dashboard) in place of the illustrative output sample.
 - README sample responses now come from v1, and the README documents the commercial clause types LEDGAR does not cover (Limitation of Liability, Force Majeure, Non-Compete and others), which the model can only map to the nearest known type.
 
@@ -195,5 +201,6 @@ First complete version: data, training with telemetry, evaluation, inference, Op
 - Micro-batch 4: about 19.5 GB accelerator memory. Micro-batch 8: about 35 GB and swap exhaustion.
 - Sanity run (256 examples, 128 steps): validation accuracy 0.8% to 20%, proving the loop learns.
 
-[Unreleased]: https://github.com/shoaibrayeen/contract-clause-classifier/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/shoaibrayeen/contract-clause-classifier/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/shoaibrayeen/contract-clause-classifier/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/shoaibrayeen/contract-clause-classifier/releases/tag/v0.1.0

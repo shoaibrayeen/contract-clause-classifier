@@ -25,7 +25,7 @@ def test_generated_rule_files_are_in_sync():
 def test_core_rules_cover_the_essentials():
     rules = _sync_module().core_rules((ROOT / "AGENTS.md").read_text())
     for must in ("uv run", "make sanity", "immutable", "OpenAI-compatible", "make test", "secrets",
-                 "CHANGELOG.md", "changelog.html", "MEMORY.md"):
+                 "CHANGELOG.md", "make changelog-html", "MEMORY.md"):
         assert must in rules, must
 
 
