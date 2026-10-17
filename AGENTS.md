@@ -32,7 +32,7 @@ These are the rules every AI assistant must follow in this repository. The full 
 
 1. **Read first:** `AGENTS.md` (rules), `MEMORY.md` (decisions, measurements, gotchas), `plans/PLAN.md` (design), `docs/TELEMETRY.md` (telemetry schema).
 2. **Run Python with `uv run`** (Python 3.12, exact pins from `uv.lock`). Add dependencies only as `uv add pkg==X.Y.Z` (stable releases).
-3. **Never start full training** (`make all`, `make train`) unless the owner asks; give the command instead. Verify training changes with `make sanity`.
+3. **Never start full training** (`make all`, `make train`) unless the owner asks; give the command instead. Verify training changes with `make sanity RUNNER=local` (transformer training needs a GPU, which Docker on a Mac lacks).
 4. **Model versions are immutable:** each run creates `<train.run_name>-v<model_version>`; never overwrite, rename or delete a version; `model_version` is bumped only by `make bump` after success.
 5. **The API stays OpenAI-compatible** and predictions keep the shape `[{"name", "confidence"}]`; requests without `model` use the latest version.
 6. **Keep training device-agnostic** (CUDA, Apple MPS, CPU via `config.resolve_device`).
@@ -52,17 +52,20 @@ Read before larger changes: [plans/PLAN.md](plans/PLAN.md) (design), [MEMORY.md]
 
 ## Commands
 
+Every `make` command runs in the Docker `tools` container by default (`RUNNER=docker`; the project is mounted, outputs land in the repo). Add `RUNNER=local` to run it with `uv run` instead, which is required for transformer training on a Mac and works without Docker running.
+
 ```bash
-uv sync                                   # install (Python 3.12, exact pins from uv.lock)
-make test                                 # pytest; stub model, no GPU or download, ~5 s
+make setup                                # build the Docker images (RUNNER=local: uv sync, Python 3.12, exact pins)
+make test                                 # pytest in Docker; `make test RUNNER=local` without Docker. Stub model, ~5 s
 make data                                 # download + tokenize LEDGAR (idempotent)
-make sanity                               # 5-min training smoke test (run name "sanity", unversioned)
-make all / train / resume / restart       # full training (hours) - only when the user asks
+make sanity RUNNER=local                  # 5-min training smoke test (run name "sanity", unversioned)
+make all / train / resume / restart       # full training (hours) - only when the user asks; RUNNER=local on a Mac, GPU=1 on NVIDIA
 make models / make next                   # list versions / show the next version name
 make evaluate MODEL=latest                # calibrate + test metrics (any version id)
 make gif MODEL=latest                     # render a version's telemetry charts to GIF
 make terminal-gif MODEL=latest            # replay a version's terminal dashboard epoch by epoch as GIF
-make serve                                # API + playground on :8000 (/playground)
+make serve                                # API + playground on :8000 (/playground); Docker = CPU, RUNNER=local = Apple GPU
+make shell                                # shell in the tools container
 make playground-gif                       # re-record demo/playground_usage.gif (needs Chrome + a trained model)
 make classical                            # train + evaluate the next classical version, rebuild model pages (CPU, ~30 min)
 make model-pages                          # regenerate docs/models/{compare,transformer,classical}.html
@@ -70,7 +73,7 @@ make compare FILE=...                     # both models side by side on a file
 uv run python scripts/04_predict.py --text "..."   # one-off prediction
 ```
 
-Always run Python through `uv run` (system Python is 3.9 and lacks the deps).
+Outside `make`, run Python through `uv run` (system Python is 3.9 and lacks the deps) or `docker compose run --rm tools python ...`.
 
 ## Layout
 
@@ -89,10 +92,11 @@ Always run Python through `uv run` (system Python is 3.9 and lacks the deps).
 | `artifacts/runs/<run>-v<N>/` | one folder per model version (git-ignored); `merged/` is the served model; `artifacts/best` → latest |
 | `data/` | raw parquet + tokenised cache (git-ignored) |
 | `demo/` | sample contract and rendered GIFs (committed) |
+| `Dockerfile`, `docker-compose.yml`, `docker/` | `api` (serving) and `tools` (every make step) images; `tools-gpu` for NVIDIA training |
 
 ## Rules
 
-1. **Do not start full training** (`make all`, `make train`, `scripts/02_train.py` without `--limit`) unless the user explicitly asks; give the user the command instead. It runs for hours and uses ~20 GB of accelerator memory. Use `make sanity` or `--limit 256` to verify training changes.
+1. **Do not start full training** (`make all`, `make train`, `scripts/02_train.py` without `--limit`) unless the user explicitly asks; give the user the command instead. It runs for hours and uses ~20 GB of accelerator memory. Use `make sanity RUNNER=local` or `--limit 256` to verify training changes.
 2. **Keep training device-agnostic.** No CUDA-only or MPS-only code paths without a fallback. Device and precision come from `config.resolve_device` / `resolve_autocast_dtype`.
 3. **Dependencies are pinned exactly** in `pyproject.toml` (stable releases only). Add or upgrade with `uv add pkg==X.Y.Z`, keep `uv.lock` in sync, and note it in `CHANGELOG.md`. Runtime deps must stay light: training-only packages go in the `train` group, plotting in `viz`, test tools in `dev`.
 4. **The API must stay OpenAI-compatible.** `POST /v1/chat/completions` returns a standard `chat.completion` object; predictions are a JSON string in `choices[0].message.content`; errors use `{"error": {message, type, param, code}}` (see `api/errors.py`). `tests/test_api.py::test_openai_sdk_compat` must keep passing.
@@ -181,4 +185,5 @@ How models are trained, named, kept and served. These protect the owner's traine
 * The tokenisation cache stores LEDGAR's original label ids; `data.get_label_space` maps them on load, so changing label groups never needs re-tokenising.
 * The live dashboard must fit the terminal (rich cannot redraw a region taller than the window and leaves copies); `tests/test_dashboard.py` guards this.
 * Saved safetensors are created 0600; `model.make_readable` fixes permissions so Docker's non-root user can read them.
-* Colima only shares folders listed in `~/.colima/default/colima.yaml`; bind mounts from elsewhere arrive empty.
+* Colima only shares folders listed in `~/.colima/default/colima.yaml`; bind mounts from elsewhere arrive empty, and the tools container then stops with a hint. Do not edit the owner's Colima config without asking.
+* Docker on macOS has no Apple GPU: transformer training targets refuse to run in Docker without `GPU=1` or `ALLOW_CPU_TRAIN=1` (`train-check` in the Makefile).

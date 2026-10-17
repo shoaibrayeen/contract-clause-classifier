@@ -218,7 +218,7 @@ The v1 result is 4.5 points above the published 100-label state of the art and i
 | Memory | 32 GB unified memory / RAM for training (24 GB with `full_finetune: false`) | 25 to 30 GB of accelerator memory with the default config (30 GB peak in the v1 run) |
 | Disk | 15 GB free per model version | base model 1.2 GB, data 0.1 GB, each full-fine-tune version about 10 GB (2 GB with LoRA) |
 | Python | 3.12 (installed by uv automatically) | 3.12.13 |
-| Tools | [uv](https://docs.astral.sh/uv/), `make`; Docker optional | uv 0.11, Docker 29 |
+| Tools | `make` and Docker ([Colima](https://github.com/abiosoft/colima) or Docker Desktop), which run every step by default; [uv](https://docs.astral.sh/uv/) to run steps on the machine itself, which a Mac needs for transformer training | Docker 29 on Colima, uv 0.11 |
 
 Training time for the default config (full fine-tune, up to 3 epochs, 5,625 optimizer steps; early stopping often ends sooner):
 
@@ -231,26 +231,66 @@ Training time for the default config (full fine-tune, up to 3 epochs, 5,625 opti
 
 ## Setup
 
+Every `make` command runs in Docker by default, so Docker is the only thing to install for most of the work. Steps that need the Apple GPU run on the machine itself with uv.
+
 ```bash
-# 1. Install uv if you don't have it
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 2. From the project folder: install Python 3.12 and all pinned dependencies into .venv
+# 1. From the project folder: build the two Docker images (tools for every step, api for serving)
 cd contract-clause-classifier
-make setup            # same as: uv sync
+make setup            # same as: make docker-build
 
-# 3. Check everything works (no model or download needed)
+# 2. Check everything works (no model or download needed)
 make test
 ```
+
+To run steps on the machine itself, for example transformer training on a Mac, install uv as well:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+```bash
+make setup RUNNER=local      # uv sync: Python 3.12 and all pinned dependencies into .venv
+```
+
+### Where commands run: Docker or local
+
+`RUNNER` picks where each `make` command runs. It is `docker` unless you pass `RUNNER=local` or set it in your shell.
+
+| | `RUNNER=docker` (default) | `RUNNER=local` |
+|---|---|---|
+| How | `docker compose run --rm tools ...`: the tools image has Python 3.12 and every package from `uv.lock`; this folder is mounted into it, so outputs land here as usual and are owned by you | `uv run ...` with the `.venv` from `uv sync` |
+| Device | CPU (Docker on macOS cannot use the Apple GPU); an NVIDIA GPU on Linux with `GPU=1` | CUDA, Apple GPU or CPU, whichever is available |
+| `make serve` | the API container (`docker compose up api`), Ctrl+C stops it | the API on this machine |
+
+What that means per command:
+
+| Commands | In Docker |
+|---|---|
+| `make data`, `classical`, `all FAMILY=classical`, `evaluate`, `predict`, `compare`, `model-pages`, `gif`, `terminal-gif`, `models`, `next`, `bump`, `test`, `rules`, `changelog-html` | run as usual, on CPU |
+| `make all`, `train`, `resume`, `restart`, `sanity` (transformer training) | stop with a hint unless `GPU=1` (NVIDIA on Linux): CPU training would take days and need more memory than the Docker VM has. On a Mac use `make all RUNNER=local`. `ALLOW_CPU_TRAIN=1` forces CPU training in Docker. |
+| `make playground-gif` | always runs on this machine: it drives your installed Chrome |
+| `make shell` | opens a shell in the tools container |
+
+**Colima users.** Colima shares only the folders listed under `mounts:` in `~/.colima/default/colima.yaml`. Add the folder that contains this project once, with `writable: true`, then run `colima restart`. Otherwise the tools container stops with a message saying the project folder is not visible.
+
+Other notes:
+
+* Evaluating the transformer in Docker runs on CPU, so it is slower than on the Apple GPU. Use `make evaluate RUNNER=local` for speed; the numbers are the same.
+* Hugging Face downloads (the Qwen3 tokenizer and base model) are kept in the Docker volume `hf-cache`, so they happen once.
+* `make terminal-gif` uses the DejaVu Sans Mono font in Docker, because Menlo exists only on macOS.
+* The script commands shown in this README (`uv run python scripts/...`) run on the machine itself. The Docker equivalent is `docker compose run --rm tools python scripts/...`, or `make shell` and then `python scripts/...`.
+* After changing dependencies (`pyproject.toml`, `uv.lock`) or the Dockerfile, run `make docker-build`. Code, config and data changes need no rebuild, because the folder is mounted.
+
+### Dependencies
 
 `uv sync` reads `.python-version` (3.12) and `uv.lock`, so everyone gets the identical, tested set of packages. Dependency groups:
 
 | Group | Contents | Installed by |
 |---|---|---|
-| runtime | torch, transformers, FastAPI, pyarrow, PyMuPDF, python-docx, rich, psutil … | always, and in Docker |
-| `train` | peft, accelerate, scikit-learn | `uv sync` (default) |
-| `viz` | matplotlib, pillow | `uv sync` (default) |
-| `dev` | pytest, httpx, openai | `uv sync` (default) |
+| runtime | torch, transformers, FastAPI, scikit-learn, pyarrow, PyMuPDF, python-docx, rich, psutil … | always, and in both Docker images |
+| `train` | peft, accelerate | `uv sync` (default), tools image |
+| `viz` | matplotlib, pillow | `uv sync` (default), tools image |
+| `dev` | pytest, httpx, openai | `uv sync` (default), tools image |
 
 Optional: copy `.env.example` to `.env` to change API settings.
 
@@ -261,14 +301,17 @@ Optional: copy `.env.example` to `.env` to change API settings.
 One command runs everything: download data, train with the live dashboard, evaluate and calibrate, and render the training GIF.
 
 ```bash
-make all
+make all RUNNER=local     # on a Mac: transformer training needs the Apple GPU, so it runs outside Docker
+make all GPU=1            # on Linux with an NVIDIA GPU: runs in Docker
 ```
+
+The classical model trains on a CPU and runs fully in Docker with `make classical` (see [Classical model](#classical-model)). Every other step below runs in Docker by default; add `RUNNER=local` to run it on the machine itself (see [Where commands run](#where-commands-run-docker-or-local)).
 
 `make all` trains the next model version (see [Model versions](#model-versions)), evaluates it, renders its GIF into `demo/`, raises `model_version` in the config, and lists all models. Or step by step:
 
 ```bash
 make data       # 1. tokenize the LEDGAR data shipped in data/raw/ledgar (downloads only if missing)
-make train      # 2. train the next version, e.g. ledgar-qwen3-0.6b-v1; live dashboard + telemetry
+make train RUNNER=local   # 2. train the next version, e.g. ledgar-qwen3-0.6b-v1; live dashboard + telemetry
 make evaluate   # 3. calibrate confidences on validation, report test metrics (latest model)
 make gif        # 4. render the latest model's telemetry charts to a GIF (also copied to demo/)
 make terminal-gif  # 4b. replay the terminal dashboard epoch by epoch as a GIF (demo/<version>_terminal.gif)
@@ -403,9 +446,9 @@ GitHub shows `.html` files as source; open them locally, through the API, or pub
 
 ```bash
 make train                     # trains the next version (ledgar-qwen3-0.6b-v<model_version>)
-make resume                    # continue an interrupted version, then evaluate, GIF and bump
-make restart                   # discard an unfinished version and train it again from scratch
-make sanity                    # 5-minute smoke test on 256 examples (unversioned run "sanity")
+make resume RUNNER=local       # continue an interrupted version, then evaluate, GIF and bump
+make restart RUNNER=local      # discard an unfinished version and train it again from scratch
+make sanity RUNNER=local       # 5-minute smoke test on 256 examples (unversioned run "sanity")
 ```
 
 Direct invocation with overrides (any config value can also be changed in the YAML):
@@ -927,18 +970,26 @@ Environment variables (see `.env.example`): `RUNS_DIR` (where transformer versio
 
 ## Docker
 
-The image serves a trained model on CPU. Training is done outside Docker.
+Two images, built from one [Dockerfile](Dockerfile) and described in [docker-compose.yml](docker-compose.yml):
+
+| Image | Compose service | Used by | Contents |
+|---|---|---|---|
+| `contract-clause-classifier:1.0.0` | `api` | `make serve`, `make docker-up` | API, playground and model pages; runtime dependencies only |
+| `contract-clause-classifier-tools:1.0.0` | `tools` | every other `make` command (see [Where commands run](#where-commands-run-docker-or-local)) | all dependency groups from `uv.lock`; the project folder is mounted, not copied |
+| `contract-clause-classifier-tools-gpu:1.0.0` | `tools-gpu` | `make train GPU=1` and the other training targets | tools with CUDA torch and an NVIDIA GPU (Linux only; not tested on this project's hardware) |
 
 ```bash
-make docker-build                 # docker build -t contract-clause-classifier:1.0.0 .
-make docker-up                    # docker compose up: http://localhost:8000, mounts ./artifacts and ./data
+make docker-build                 # build the api and tools images (rerun after dependency changes)
+make serve                        # API in the foreground on http://localhost:8000, Ctrl+C stops it
+make docker-up                    # the same in the background: mounts ./artifacts, ./data and ./docs/models
 make docker-down
+make shell                        # a shell in the tools container
 ```
 
-* Docker on macOS cannot use the Apple GPU, so the container runs on CPU (fine for classification). For GPU speed on a Mac, use `make serve` natively.
-* The image is about 1.9 GB (CPU-only torch). It runs as a non-root user and has a `HEALTHCHECK` on `/health`.
+* Docker on macOS cannot use the Apple GPU, so both images run on CPU there (fine for classification). For GPU speed on a Mac, use `make serve RUNNER=local`.
+* Each image takes about 2.3 GB of disk (CPU-only torch). The api image runs as a non-root user and has a `HEALTHCHECK` on `/health`; the tools container runs as your own user, so files it writes are yours.
 * The container serves every transformer version under `/app/artifacts/runs` (default: latest) and every classical version under `/app/artifacts/classical/runs`, plus the playground, `/v1/compare` and the model pages, and picks up newly trained versions without a restart.
-* **Colima users:** Colima only shares folders listed under `mounts:` in `~/.colima/default/colima.yaml`. If the project is not under a shared folder, the mounts arrive empty and `/health` reports "No trained model". Add the project folder to `mounts:` and run `colima restart`, or copy the model into a container:
+* **Colima users:** Colima only shares folders listed under `mounts:` in `~/.colima/default/colima.yaml`. If the project is not under a shared folder, the mounts arrive empty: the tools container stops with a message, and `/health` reports "No trained model". Add the project folder to `mounts:` and run `colima restart`. To serve without sharing the folder, copy the models into a container instead:
 
   ```bash
   docker create --name ccc -p 8000:8000 contract-clause-classifier:1.0.0
@@ -1041,10 +1092,11 @@ Classical model settings live in [configs/classical/ledgar_tfidf_lr.yaml](config
 ## Testing
 
 ```bash
-make test
+make test                 # in the tools container
+make test RUNNER=local    # with uv, no Docker needed
 ```
 
-87 tests cover segmentation, label grouping, the classical backend and model families, `/v1/compare`, the model pages, data paging and batching, model versioning (naming, never-overwrite, resume and restart, bumping, latest selection), multi-version serving and model selection, the dashboard fitting the terminal, the prediction output format, every API route and error case, the playground, API-key auth, the OpenAPI schema, compatibility with the official OpenAI Python SDK, that every AI assistant's rules file matches `AGENTS.md`, and that `changelog.html` and all version numbers agree with `CHANGELOG.md`. They use a keyword-based stub model, so they run in seconds with no download or GPU.
+94 tests cover segmentation, label grouping, the classical backend and model families, `/v1/compare`, the model pages, data paging and batching, model versioning (naming, never-overwrite, resume and restart, bumping, latest selection), multi-version serving and model selection, the dashboard fitting the terminal, the Makefile running each step in Docker or locally, the prediction output format, every API route and error case, the playground, API-key auth, the OpenAPI schema, compatibility with the official OpenAI Python SDK, that every AI assistant's rules file matches `AGENTS.md`, and that `changelog.html` and all version numbers agree with `CHANGELOG.md`. They use a keyword-based stub model, so they run in seconds with no download or GPU.
 
 ---
 
@@ -1060,6 +1112,9 @@ make test
 | Training was interrupted | `make resume` continues from `checkpoint-last/`. |
 | `MPS backend out of memory` | Lower `train.batch_size` to 2 and raise `grad_accum` to 16, or set `gradient_checkpointing: true`. |
 | Docker `/health` says model missing on Colima | See the Colima note in [Docker](#docker). |
+| A `make` command says "The project folder is not visible inside the container" | Docker cannot see this folder. Share it with the Docker VM (Colima: `mounts:` in `~/.colima/default/colima.yaml`, then `colima restart`), or add `RUNNER=local`. |
+| `make all` or `make train` says "Transformer training in Docker needs an NVIDIA GPU" | On a Mac, train outside Docker: `make all RUNNER=local`. On Linux with an NVIDIA GPU: `GPU=1`. |
+| `Cannot connect to the Docker daemon` | Start Docker (`colima start`), or add `RUNNER=local`. |
 | Hugging Face rate-limit warnings | Optional: `export HF_TOKEN=...` (a free read token). |
 | A PDF returns an error about a text layer | The PDF is scanned; run OCR first. |
 

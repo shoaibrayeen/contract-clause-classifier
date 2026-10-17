@@ -8,6 +8,8 @@ A **classical model** trained on the same data as the transformer, both models s
 
 ### Added
 
+- **`make` runs every step in Docker by default.** A new `tools` image (all dependency groups at the `uv.lock` versions, CPU torch) runs data, classical training, evaluation, predictions, GIFs, model pages, tests and the generators, with the project folder mounted, so outputs land in the repo and are owned by you. `RUNNER=local` runs the old way with `uv run`. `make setup` now builds the images; `make docker-build` builds both `api` and `tools`; `make shell` opens a shell in the tools container. Verified end to end on Colima: 94 tests, `make data`, `make predict`, `make compare`, the generators and the API container.
+- `tools-gpu` service and `make train GPU=1` for transformer training in Docker on Linux with an NVIDIA GPU (CUDA torch from the PyTorch cu130 index; not tested on this project's hardware).
 - **Classical model `ledgar-tfidf-lr-v1`**: TF-IDF features (word 1-2 grams + character 3-5 grams, 253,103 features) with logistic regression (C=30), on the same LEDGAR splits and 78 clause types. Test: 90.88% accuracy, 97.33% top-3, 88.24% macro-F1, 1.9% calibration error. 24 minutes to train on a CPU, under 1 ms per provision, 145 MB. Linear SVM (91.78% validation) and Complement Naive Bayes (84.19%) are trained on the same features and reported, not served. Code in `src/classification/classical/`, settings in `configs/classical/ledgar_tfidf_lr.yaml` (its own `model_version`), runs in `artifacts/classical/runs/ledgar-tfidf-lr-v<N>/`.
 - **Classical model `ledgar-tfidf-lr-v2`**, now the latest classical version: a retrain of v1 with the same settings that reproduces it exactly (same validation, learning-curve and test numbers), confirming that classical training is deterministic. v1 is kept and selectable by id.
 - **`make classical`** (also `make all FAMILY=classical` and `make all-classical`): data, train, evaluate, model pages, version bump. Steps on their own: `make classical-train`, `make classical-evaluate`, `make classical-bump`.
@@ -17,10 +19,14 @@ A **classical model** trained on the same data as the transformer, both models s
 - `make compare FILE=...` (`scripts/11_compare.py`): both models on a file or `--text`, side by side in the terminal.
 - Model alias `latest-classical` in `/v1/chat/completions` and `/v1/models/{id}`; `family` field (`transformer` or `classical`) in `/v1/models`; `latest_classical` in `/health`; `make models` lists both families.
 - Settings `CLASSICAL_RUNS_DIR` (default `artifacts/classical/runs`) and `PAGES_DIR` (default `docs/models`), also in Docker and `.env.example`. The Docker image includes `docs/models` and `changelog.html`.
-- Tests: 87 in total (classical backend and explanations, model families, `/v1/compare`, model pages).
+- Tests: 94 in total (classical backend and explanations, model families, `/v1/compare`, model pages, Makefile runners).
 
 ### Changed
 
+- **Breaking: transformer training no longer runs by default on a Mac.** `make all`, `train`, `resume`, `restart` and `sanity` now default to Docker, which cannot use the Apple GPU, so they stop with a hint instead of training on CPU for days. On a Mac, add `RUNNER=local` (for example `make all RUNNER=local`); `ALLOW_CPU_TRAIN=1` forces CPU training in Docker.
+- `make serve` runs the API container on CPU (`docker compose up api`); `make serve RUNNER=local` keeps the Apple GPU. The API container now mounts `docs/models`, so regenerated model pages are served without a rebuild. `PORT` also sets the container's published port.
+- `make playground-gif` always runs on the machine itself, because it drives the installed Chrome.
+- `Dockerfile` has two targets, `api` (default, unchanged contents) and `tools`; `docker-compose.yml` adds the `tools` and `tools-gpu` services under profiles, so `docker compose up` still starts only the API.
 - **Dependencies:** `scikit-learn==1.9.1` and `joblib==1.6.0` moved from the `train` group to runtime dependencies so the API and Docker image can load classical models (image about 40 MB larger).
 - Requests without `model` still use the latest **transformer**; `artifacts/best` still points at it.
 

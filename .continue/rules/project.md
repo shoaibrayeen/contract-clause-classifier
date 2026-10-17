@@ -16,7 +16,7 @@ These are the rules every AI assistant must follow in this repository. The full 
 
 1. **Read first:** `AGENTS.md` (rules), `MEMORY.md` (decisions, measurements, gotchas), `plans/PLAN.md` (design), `docs/TELEMETRY.md` (telemetry schema).
 2. **Run Python with `uv run`** (Python 3.12, exact pins from `uv.lock`). Add dependencies only as `uv add pkg==X.Y.Z` (stable releases).
-3. **Never start full training** (`make all`, `make train`) unless the owner asks; give the command instead. Verify training changes with `make sanity`.
+3. **Never start full training** (`make all`, `make train`) unless the owner asks; give the command instead. Verify training changes with `make sanity RUNNER=local` (transformer training needs a GPU, which Docker on a Mac lacks).
 4. **Model versions are immutable:** each run creates `<train.run_name>-v<model_version>`; never overwrite, rename or delete a version; `model_version` is bumped only by `make bump` after success.
 5. **The API stays OpenAI-compatible** and predictions keep the shape `[{"name", "confidence"}]`; requests without `model` use the latest version.
 6. **Keep training device-agnostic** (CUDA, Apple MPS, CPU via `config.resolve_device`).

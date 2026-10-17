@@ -31,4 +31,6 @@ def test_versions_agree():
     assert released and released[0] == pyproject == classification.__version__
     assert f"contract-clause-classifier:{pyproject}" in (ROOT / "Makefile").read_text()
     assert f"contract-clause-classifier:{pyproject}" in (ROOT / "docker-compose.yml").read_text()
+    for path in ("Makefile", "docker-compose.yml"):
+        assert f"contract-clause-classifier-tools:{pyproject}" in (ROOT / path).read_text(), path
     assert md.index("## [Unreleased]") < md.index(f"## [{pyproject}]")
